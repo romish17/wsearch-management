@@ -1,8 +1,9 @@
 #Requires -Version 5.1
 <#
-WindowsSearchTuner.ps1 - WPF GUI (Adaptive + DB Manager)
+WindowsSearchTuner.ps1 - WPF GUI (Adaptive + DB Manager + Logs)
 - Tab 1: Tweaks Windows Search / FSLogix (si détecté)
 - Tab 2: Gestion des bases Windows Search (Global Windows.edb / Per-user *.edb)
+- Tab 3: Visualisation des logs Windows Search (Event Viewer)
 #>
 
 # -------------------------
@@ -351,6 +352,144 @@ function Remove-DbFile([string]$path) {
 }
 
 # -------------------------
+# Windows Search Logs
+# -------------------------
+function Get-WindowsSearchLogs {
+    param(
+        [int]$MaxEvents = 200,
+        [string[]]$Levels = @("Error","Warning","Information"),
+        [string]$FilterText = ""
+    )
+
+    $result = New-Object System.Collections.ObjectModel.ObservableCollection[Object]
+
+    # Map level names to integers
+    $levelMap = @{
+        "Critical"    = 1
+        "Error"       = 2
+        "Warning"     = 3
+        "Information" = 4
+        "Verbose"     = 5
+    }
+
+    $levelNumbers = @()
+    foreach ($l in $Levels) {
+        if ($levelMap.ContainsKey($l)) {
+            $levelNumbers += $levelMap[$l]
+        }
+    }
+
+    # Provider names for Windows Search logs
+    $providers = @(
+        "Microsoft-Windows-Search",
+        "Microsoft-Windows-Search-Core",
+        "Microsoft-Windows-Search-ProfileNotify",
+        "Microsoft-Windows-SearchIndexer"
+    )
+
+    $allEvents = @()
+
+    foreach ($provider in $providers) {
+        try {
+            $filterXml = @"
+<QueryList>
+  <Query Id="0" Path="Application">
+    <Select Path="Application">*[System[Provider[@Name='$provider']]]</Select>
+  </Query>
+</QueryList>
+"@
+            $events = Get-WinEvent -FilterXml $filterXml -MaxEvents $MaxEvents -ErrorAction SilentlyContinue
+            if ($events) { $allEvents += $events }
+        } catch { }
+
+        # Try the dedicated log path
+        try {
+            $logName = "Microsoft-Windows-Search/Admin"
+            if ($provider -eq "Microsoft-Windows-Search") {
+                $events = Get-WinEvent -LogName $logName -MaxEvents $MaxEvents -ErrorAction SilentlyContinue
+                if ($events) { $allEvents += $events }
+            }
+        } catch { }
+
+        # Also check Operational logs
+        try {
+            $logName = "Microsoft-Windows-Search/Operational"
+            $events = Get-WinEvent -LogName $logName -MaxEvents $MaxEvents -ErrorAction SilentlyContinue
+            if ($events) { $allEvents += $events }
+        } catch { }
+    }
+
+    # Also get events from System log related to WSearch service
+    try {
+        $filterXml = @"
+<QueryList>
+  <Query Id="0" Path="System">
+    <Select Path="System">*[System[Provider[@Name='Service Control Manager']]] and *[EventData[Data[@Name='param1']='Windows Search']]</Select>
+  </Query>
+</QueryList>
+"@
+        $events = Get-WinEvent -FilterXml $filterXml -MaxEvents 50 -ErrorAction SilentlyContinue
+        if ($events) { $allEvents += $events }
+    } catch { }
+
+    # Filter and sort
+    $allEvents = $allEvents | Where-Object {
+        $levelNumbers -contains $_.Level -or $levelNumbers.Count -eq 0
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($FilterText)) {
+        $allEvents = $allEvents | Where-Object {
+            $_.Message -like "*$FilterText*" -or
+            $_.ProviderName -like "*$FilterText*"
+        }
+    }
+
+    $allEvents = $allEvents | Sort-Object TimeCreated -Descending | Select-Object -First $MaxEvents
+
+    foreach ($e in $allEvents) {
+        $levelName = switch ($e.Level) {
+            1 { "Critical" }
+            2 { "Error" }
+            3 { "Warning" }
+            4 { "Information" }
+            5 { "Verbose" }
+            default { "Unknown" }
+        }
+
+        $result.Add([pscustomobject]@{
+            TimeCreated  = $e.TimeCreated
+            Level        = $levelName
+            EventId      = $e.Id
+            Source       = $e.ProviderName
+            Message      = ($e.Message -replace "`r`n", " " -replace "`n", " ").Substring(0, [Math]::Min(500, $e.Message.Length))
+            FullMessage  = $e.Message
+        })
+    }
+
+    return $result
+}
+
+function Open-EventViewer-SearchLogs {
+    try {
+        # Open Event Viewer filtered to Windows Search
+        Start-Process "eventvwr.msc" -ArgumentList '/c:"Microsoft-Windows-Search/Admin"' -ErrorAction SilentlyContinue
+    } catch {
+        # Fallback: just open Event Viewer
+        Start-Process "eventvwr.msc" -ErrorAction SilentlyContinue
+    }
+}
+
+function Export-LogsToCsv {
+    param(
+        [System.Collections.ObjectModel.ObservableCollection[Object]]$Logs,
+        [string]$FilePath
+    )
+
+    $Logs | Select-Object TimeCreated, Level, EventId, Source, FullMessage |
+        Export-Csv -Path $FilePath -NoTypeInformation -Encoding UTF8
+}
+
+# -------------------------
 # WPF UI
 # -------------------------
 [xml]$Xaml = @"
@@ -509,6 +648,104 @@ function Remove-DbFile([string]$path) {
                     </DataGrid>
                 </Grid>
             </TabItem>
+
+            <TabItem Header="Logs">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="8" Grid.Row="0" Margin="0,0,0,8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,8">
+                                <TextBlock VerticalAlignment="Center" Margin="0,0,8,0">Filtres niveau:</TextBlock>
+                                <CheckBox x:Name="ChkError" Content="Erreurs" IsChecked="True" Margin="4,0"/>
+                                <CheckBox x:Name="ChkWarning" Content="Avertissements" IsChecked="True" Margin="4,0"/>
+                                <CheckBox x:Name="ChkInfo" Content="Information" IsChecked="True" Margin="4,0"/>
+
+                                <TextBlock VerticalAlignment="Center" Margin="20,0,8,0">Max events:</TextBlock>
+                                <ComboBox x:Name="CmbMaxEvents" Width="80" SelectedIndex="1">
+                                    <ComboBoxItem Content="50"/>
+                                    <ComboBoxItem Content="100"/>
+                                    <ComboBoxItem Content="200"/>
+                                    <ComboBoxItem Content="500"/>
+                                </ComboBox>
+
+                                <TextBlock VerticalAlignment="Center" Margin="20,0,8,0">Recherche:</TextBlock>
+                                <TextBox x:Name="TxtLogFilter" Width="180" Margin="4,0"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Grid.Row="1" HorizontalAlignment="Right">
+                                <Button x:Name="BtnRefreshLogs" Content="Charger les logs" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnClearLogFilter" Content="Effacer filtre" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnExportLogs" Content="Exporter CSV" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnOpenEventViewer" Content="Event Viewer" Margin="4" Padding="12,6"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <DataGrid x:Name="GridLogs" Grid.Row="1"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow"
+                              GridLinesVisibility="Horizontal"
+                              HeadersVisibility="Column"
+                              RowHeight="28">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Date/Heure" Binding="{Binding TimeCreated, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" Width="150"/>
+                            <DataGridTextColumn Header="Niveau" Binding="{Binding Level}" Width="90">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <Trigger Property="Text" Value="Error">
+                                                <Setter Property="Foreground" Value="#FF4444"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </Trigger>
+                                            <Trigger Property="Text" Value="Critical">
+                                                <Setter Property="Foreground" Value="#FF0000"/>
+                                                <Setter Property="FontWeight" Value="Bold"/>
+                                            </Trigger>
+                                            <Trigger Property="Text" Value="Warning">
+                                                <Setter Property="Foreground" Value="#FFA500"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="ID" Binding="{Binding EventId}" Width="60"/>
+                            <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="200"/>
+                            <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="8" Grid.Row="2" Margin="0,8,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" FontWeight="SemiBold" Margin="0,0,0,4">Détail du message sélectionné:</TextBlock>
+                            <TextBox x:Name="TxtLogDetail" Grid.Row="1"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Height="100"
+                                     Background="#1E1E1E"
+                                     Foreground="#CCCCCC"
+                                     Padding="8"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
         </TabControl>
 
         <Border Grid.Row="2" BorderBrush="#444" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,10,0,0">
@@ -556,6 +793,19 @@ $BtnStartWSearch      = $window.FindName("BtnStartWSearch")
 $BtnRestartWSearchDb  = $window.FindName("BtnRestartWSearchDb")
 $BtnDeleteDb          = $window.FindName("BtnDeleteDb")
 
+# Logs tab controls
+$GridLogs             = $window.FindName("GridLogs")
+$TxtLogDetail         = $window.FindName("TxtLogDetail")
+$TxtLogFilter         = $window.FindName("TxtLogFilter")
+$ChkError             = $window.FindName("ChkError")
+$ChkWarning           = $window.FindName("ChkWarning")
+$ChkInfo              = $window.FindName("ChkInfo")
+$CmbMaxEvents         = $window.FindName("CmbMaxEvents")
+$BtnRefreshLogs       = $window.FindName("BtnRefreshLogs")
+$BtnClearLogFilter    = $window.FindName("BtnClearLogFilter")
+$BtnExportLogs        = $window.FindName("BtnExportLogs")
+$BtnOpenEventViewer   = $window.FindName("BtnOpenEventViewer")
+
 function Set-Status([string]$msg) { $TxtStatus.Text = $msg }
 
 function Build-SystemInfoText {
@@ -574,6 +824,10 @@ $TxtWSearchStatus.Text = Get-WSearchStatusText
 # DB datasource
 $DbRows = New-Object System.Collections.ObjectModel.ObservableCollection[Object]
 $GridDb.ItemsSource = $DbRows
+
+# Logs datasource
+$LogRows = New-Object System.Collections.ObjectModel.ObservableCollection[Object]
+$GridLogs.ItemsSource = $LogRows
 
 function Refresh-Tweaks {
     $global:UiRows = Build-UiRows
@@ -814,6 +1068,84 @@ Confirmer la suppression ?
     } catch {
         Set-Status "Erreur suppression: $($_.Exception.Message)"
         [System.Windows.MessageBox]::Show($_.Exception.Message, "Erreur", "OK", "Error") | Out-Null
+    }
+})
+
+# -------------------------
+# Events - Logs tab
+# -------------------------
+function Refresh-LogsToGrid {
+    $levels = @()
+    if ($ChkError.IsChecked)   { $levels += "Error"; $levels += "Critical" }
+    if ($ChkWarning.IsChecked) { $levels += "Warning" }
+    if ($ChkInfo.IsChecked)    { $levels += "Information" }
+
+    $maxEventsText = ($CmbMaxEvents.SelectedItem).Content
+    $maxEvents = [int]$maxEventsText
+
+    $filterText = $TxtLogFilter.Text
+
+    Set-Status "Chargement des logs..."
+    $window.Cursor = [System.Windows.Input.Cursors]::Wait
+
+    try {
+        $logs = Get-WindowsSearchLogs -MaxEvents $maxEvents -Levels $levels -FilterText $filterText
+        $LogRows.Clear()
+        foreach ($l in $logs) { $LogRows.Add($l) }
+        Set-Status "Logs chargés: $($logs.Count) entrée(s)."
+    } catch {
+        Set-Status "Erreur: $($_.Exception.Message)"
+    } finally {
+        $window.Cursor = $null
+    }
+}
+
+$BtnRefreshLogs.Add_Click({
+    try { Refresh-LogsToGrid } catch {
+        Set-Status "Erreur chargement logs: $($_.Exception.Message)"
+        [System.Windows.MessageBox]::Show($_.Exception.Message, "Erreur", "OK", "Error") | Out-Null
+    }
+})
+
+$BtnClearLogFilter.Add_Click({
+    $TxtLogFilter.Text = ""
+    Set-Status "Filtre effacé."
+})
+
+$BtnExportLogs.Add_Click({
+    try {
+        if ($LogRows.Count -eq 0) { throw "Aucun log à exporter. Charge d'abord les logs." }
+
+        $dir = "C:\Temp"
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $ts = Get-Date -Format "yyyyMMdd_HHmmss"
+        $filePath = Join-Path $dir "WindowsSearch_Logs_$ts.csv"
+
+        Export-LogsToCsv -Logs $LogRows -FilePath $filePath
+        Set-Status "Logs exportés: $filePath"
+        [System.Windows.MessageBox]::Show("Logs exportés vers:`n$filePath", "Export", "OK", "Information") | Out-Null
+    } catch {
+        Set-Status "Erreur export: $($_.Exception.Message)"
+        [System.Windows.MessageBox]::Show($_.Exception.Message, "Erreur", "OK", "Error") | Out-Null
+    }
+})
+
+$BtnOpenEventViewer.Add_Click({
+    try {
+        Open-EventViewer-SearchLogs
+        Set-Status "Event Viewer ouvert."
+    } catch {
+        Set-Status "Erreur: $($_.Exception.Message)"
+    }
+})
+
+# Event: Show detail when selecting a log row
+$GridLogs.Add_SelectionChanged({
+    $row = $GridLogs.SelectedItem
+    if ($null -ne $row) {
+        $TxtLogDetail.Text = $row.FullMessage
+    } else {
+        $TxtLogDetail.Text = ""
     }
 })
 
