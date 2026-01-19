@@ -74,8 +74,10 @@ function Backup-RegistryKeyToRegFile([string]$RegKey, [string]$OutFile) {
 }
 
 # -------------------------
-# FSLogix detection
+# Profile Type Detection (FSLogix, UPD, Roaming)
 # -------------------------
+
+# FSLogix detection
 $fslogixRegPresent = (Test-Path "HKLM:\SOFTWARE\FSLogix") -or (Test-Path "HKLM:\SOFTWARE\Policies\FSLogix")
 $fslogixServicePresent = $false
 try {
@@ -84,9 +86,139 @@ try {
 } catch { }
 $hasFSLogix = ($fslogixRegPresent -or $fslogixServicePresent)
 
+# UPD (User Profile Disks) detection - RDS feature
+$hasUPD = $false
+try {
+    # Check RDS cluster settings
+    $rdsClusterKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\ClusterSettings"
+    if (Test-Path $rdsClusterKey) {
+        $props = Get-ItemProperty $rdsClusterKey -ErrorAction SilentlyContinue
+        if ($props.UvhdEnabled -eq 1) { $hasUPD = $true }
+        if ($props.UvhdShareUrl) { $hasUPD = $true }
+    }
+
+    # Also check policies
+    $rdsPolicyKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services"
+    if (Test-Path $rdsPolicyKey) {
+        $props = Get-ItemProperty $rdsPolicyKey -ErrorAction SilentlyContinue
+        if ($props.fEnableUserDataDisk -eq 1) { $hasUPD = $true }
+    }
+} catch { }
+
+# Roaming Profiles detection
+$hasRoamingProfiles = $false
+$roamingProfilePath = ""
+try {
+    # Check if roaming profiles are configured via GPO
+    $profilePolicyKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System"
+    if (Test-Path $profilePolicyKey) {
+        $props = Get-ItemProperty $profilePolicyKey -ErrorAction SilentlyContinue
+        if ($props.EnableProfileQuota) { $hasRoamingProfiles = $true }
+    }
+
+    # Check Terminal Services profile path
+    $tsPolicyKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services"
+    if (Test-Path $tsPolicyKey) {
+        $props = Get-ItemProperty $tsPolicyKey -ErrorAction SilentlyContinue
+        if ($props.WFProfilePath -and $props.WFProfilePath -like "\\*") {
+            $hasRoamingProfiles = $true
+            $roamingProfilePath = $props.WFProfilePath
+        }
+    }
+
+    # Check default user profile for roaming indicator
+    $profileListKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList"
+    if (Test-Path $profileListKey) {
+        $profiles = Get-ChildItem $profileListKey -ErrorAction SilentlyContinue
+        foreach ($p in $profiles) {
+            $profileProps = Get-ItemProperty $p.PSPath -ErrorAction SilentlyContinue
+            if ($profileProps.CentralProfile -and $profileProps.CentralProfile -like "\\*") {
+                $hasRoamingProfiles = $true
+                break
+            }
+        }
+    }
+} catch { }
+
+# Determine profile type priority: FSLogix > UPD > Roaming > Local
+$detectedProfileType = "Local"
+if ($hasFSLogix) { $detectedProfileType = "FSLogix" }
+elseif ($hasUPD) { $detectedProfileType = "UPD" }
+elseif ($hasRoamingProfiles) { $detectedProfileType = "Roaming" }
+
+# Current selected profile type (can be changed by user)
+$script:selectedProfileType = $detectedProfileType
+
+# -------------------------
+# Profile-based Recommendations
+# -------------------------
+$ProfileRecommendations = @{
+    "Local" = @{
+        Description = "Profils locaux - Configuration standard"
+        EnablePerUserCatalog = ""  # Pas de recommandation spécifique
+        DisableBackoff = "0"
+        ConnectedSearchUseWeb = "0"
+        EnableDynamicContentInWSB = "0"
+        PreventRemoteQueries = "1"
+        DisableRemovableDriveIndexing = "1"
+        AllowCloudSearch = "0"
+        AllowSearchToUseLocation = "0"
+        RoamSearch = ""  # N/A
+        Notes = "Configuration standard pour postes fixes. L'indexation per-user n'est généralement pas nécessaire."
+    }
+    "FSLogix" = @{
+        Description = "FSLogix - Optimisé pour conteneurs VHD/VHDX"
+        EnablePerUserCatalog = "1"  # Recommandé pour isoler les index dans le conteneur
+        DisableBackoff = "0"  # Garder le backoff pour réduire la charge
+        ConnectedSearchUseWeb = "0"
+        EnableDynamicContentInWSB = "0"
+        PreventRemoteQueries = "1"
+        DisableRemovableDriveIndexing = "1"
+        AllowCloudSearch = "0"
+        AllowSearchToUseLocation = "0"
+        RoamSearch = "0"  # Désactivé sur OS modernes (>= 1809)
+        Notes = "Per-user catalog isolé dans le VHD. RoamSearch désactivé car géré nativement. Backoff actif pour réduire I/O."
+    }
+    "UPD" = @{
+        Description = "User Profile Disks (RDS) - Optimisé pour VHD RDS"
+        EnablePerUserCatalog = "1"  # Isoler dans le UPD
+        DisableBackoff = "0"
+        ConnectedSearchUseWeb = "0"
+        EnableDynamicContentInWSB = "0"
+        PreventRemoteQueries = "1"
+        DisableRemovableDriveIndexing = "1"
+        AllowCloudSearch = "0"
+        AllowSearchToUseLocation = "0"
+        RoamSearch = ""  # N/A pour UPD
+        Notes = "Index per-user stocké dans le UPD. Minimise l'impact sur le serveur RDS."
+    }
+    "Roaming" = @{
+        Description = "Profils itinérants - Éviter l'indexation per-user"
+        EnablePerUserCatalog = "0"  # IMPORTANT: Éviter les catalogues per-user dans profils roaming
+        DisableBackoff = "0"
+        ConnectedSearchUseWeb = "0"
+        EnableDynamicContentInWSB = "0"
+        PreventRemoteQueries = "1"
+        DisableRemovableDriveIndexing = "1"
+        AllowCloudSearch = "0"
+        AllowSearchToUseLocation = "0"
+        RoamSearch = ""  # N/A
+        Notes = "ATTENTION: Les catalogues per-user dans les profils roaming causent des problèmes de synchronisation et de corruption. Utiliser l'index global uniquement."
+    }
+}
+
 # -------------------------
 # Settings catalog (Adaptive)
 # -------------------------
+function Get-ProfileRecommendation([string]$SettingName) {
+    $profile = $script:selectedProfileType
+    $recs = $ProfileRecommendations[$profile]
+    if ($recs -and $recs.ContainsKey($SettingName)) {
+        return $recs[$SettingName]
+    }
+    return ""
+}
+
 $RawSettings = @(
     [pscustomobject]@{
         Category="Windows Search (Policies)"
@@ -96,8 +228,9 @@ $RawSettings = @(
         Type="DWORD"
         Policy=$true
         RequiresFSLogix=$false
-        RecommendedDynamic={ "0" }
-        Description="0 = Backoff actif (moins agressif). 1 = backoff désactivé (plus agressif)."
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "DisableBackoff" }
+        Description="0 = Backoff actif (moins agressif, économise ressources). 1 = backoff désactivé (plus agressif)."
     },
     [pscustomobject]@{
         Category="Windows Search (Policies)"
@@ -107,8 +240,9 @@ $RawSettings = @(
         Type="DWORD"
         Policy=$true
         RequiresFSLogix=$false
-        RecommendedDynamic={ "0" }
-        Description="0 = coupe résultats Web/Bing."
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "ConnectedSearchUseWeb" }
+        Description="0 = coupe résultats Web/Bing (économise bande passante)."
     },
     [pscustomobject]@{
         Category="Windows Search (Policies)"
@@ -118,8 +252,9 @@ $RawSettings = @(
         Type="DWORD"
         Policy=$true
         RequiresFSLogix=$false
-        RecommendedDynamic={ "0" }
-        Description="0 = désactive contenus dynamiques/highlights."
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "EnableDynamicContentInWSB" }
+        Description="0 = désactive contenus dynamiques/highlights (économise ressources)."
     },
     [pscustomobject]@{
         Category="Windows Search (Policies)"
@@ -129,8 +264,9 @@ $RawSettings = @(
         Type="DWORD"
         Policy=$true
         RequiresFSLogix=$false
-        RecommendedDynamic={ "1" }
-        Description="1 = empêche requêtes à distance sur l'index."
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "PreventRemoteQueries" }
+        Description="1 = empêche requêtes à distance sur l'index (sécurité)."
     },
     [pscustomobject]@{
         Category="Windows Search (Policies)"
@@ -140,8 +276,9 @@ $RawSettings = @(
         Type="DWORD"
         Policy=$true
         RequiresFSLogix=$false
-        RecommendedDynamic={ "1" }
-        Description="1 = pas d'indexation sur supports amovibles."
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "DisableRemovableDriveIndexing" }
+        Description="1 = pas d'indexation sur supports amovibles (économise ressources)."
     },
     [pscustomobject]@{
         Category="Windows Search (Policies)"
@@ -151,8 +288,9 @@ $RawSettings = @(
         Type="DWORD"
         Policy=$true
         RequiresFSLogix=$false
-        RecommendedDynamic={ "0" }
-        Description="0 = coupe la recherche cloud dans la recherche Windows."
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "AllowCloudSearch" }
+        Description="0 = coupe la recherche cloud (économise bande passante)."
     },
     [pscustomobject]@{
         Category="Windows Search (Policies)"
@@ -162,8 +300,9 @@ $RawSettings = @(
         Type="DWORD"
         Policy=$true
         RequiresFSLogix=$false
-        RecommendedDynamic={ "0" }
-        Description="0 = désactive usage localisation."
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "AllowSearchToUseLocation" }
+        Description="0 = désactive usage localisation (confidentialité)."
     },
 
     [pscustomobject]@{
@@ -174,10 +313,9 @@ $RawSettings = @(
         Type="DWORD"
         Policy=$false
         RequiresFSLogix=$false
-        RecommendedDynamic={
-            if ($script:isServer -or $script:isModernBuild) { "1" } else { "" }
-        }
-        Description="1 = index par utilisateur (souvent pertinent en multi-session)."
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "EnablePerUserCatalog" }
+        Description="1 = index par utilisateur. ATTENTION: Pas recommandé avec profils roaming classiques!"
     },
 
     # FSLogix only if present
@@ -189,8 +327,9 @@ $RawSettings = @(
         Type="DWORD"
         Policy=$false
         RequiresFSLogix=$true
-        RecommendedDynamic={ if ($script:isModernBuild) { "0" } else { "" } }
-        Description="Sur OS récents, RoamSearch est souvent inutile => 0."
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "RoamSearch" }
+        Description="0 = désactivé (recommandé sur OS >= 1809). 1 = roaming de l'index via FSLogix."
     },
     [pscustomobject]@{
         Category="FSLogix"
@@ -200,8 +339,9 @@ $RawSettings = @(
         Type="DWORD"
         Policy=$true
         RequiresFSLogix=$true
-        RecommendedDynamic={ if ($script:isModernBuild) { "0" } else { "" } }
-        Description="Sur OS récents, recommandé 0."
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "RoamSearch" }
+        Description="0 = désactivé (recommandé sur OS >= 1809). Appliqué via GPO."
     }
 )
 
@@ -1200,10 +1340,40 @@ function Repair-SearchService {
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="8" Grid.Row="0" Margin="0,0,0,8">
+                    <!-- Panneau sélection type de profil -->
+                    <Border BorderBrush="#0078D4" BorderThickness="1" CornerRadius="6" Padding="10" Grid.Row="0" Margin="0,0,0,8" Background="#1A0078D4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Grid.Column="0" Grid.Row="0" VerticalAlignment="Center">
+                                <TextBlock Text="Type de profil:" FontWeight="SemiBold" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="CmbProfileType" Width="150" Margin="0,0,15,0" VerticalAlignment="Center">
+                                    <ComboBoxItem Content="Local" Tag="Local"/>
+                                    <ComboBoxItem Content="FSLogix" Tag="FSLogix"/>
+                                    <ComboBoxItem Content="UPD (RDS)" Tag="UPD"/>
+                                    <ComboBoxItem Content="Profils itinérants" Tag="Roaming"/>
+                                </ComboBox>
+                                <TextBlock x:Name="TxtDetectedProfile" Opacity="0.8" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                            </StackPanel>
+
+                            <TextBlock x:Name="TxtProfileDescription" Grid.Column="1" Grid.Row="0" Opacity="0.9" VerticalAlignment="Center" FontStyle="Italic"/>
+
+                            <TextBlock x:Name="TxtProfileNotes" Grid.ColumnSpan="2" Grid.Row="1" TextWrapping="Wrap" Opacity="0.85" Margin="0,8,0,0" Foreground="#FF9800"/>
+                        </Grid>
+                    </Border>
+
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="8" Grid.Row="1" Margin="0,0,0,8">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -1224,7 +1394,7 @@ function Repair-SearchService {
                         </Grid>
                     </Border>
 
-                    <DataGrid x:Name="GridSettings" Grid.Row="1"
+                    <DataGrid x:Name="GridSettings" Grid.Row="2"
                               AutoGenerateColumns="False"
                               CanUserAddRows="False"
                               IsReadOnly="False"
@@ -1739,13 +1909,60 @@ $BtnRestartWSearchMaint = $window.FindName("BtnRestartWSearchMaint")
 $ChkStopWSearchBeforeDelete = $window.FindName("ChkStopWSearchBeforeDelete")
 $BtnShowConnectedUsers = $window.FindName("BtnShowConnectedUsers")
 
+# Profile selector controls (Tweaks tab)
+$CmbProfileType       = $window.FindName("CmbProfileType")
+$TxtDetectedProfile   = $window.FindName("TxtDetectedProfile")
+$TxtProfileDescription = $window.FindName("TxtProfileDescription")
+$TxtProfileNotes      = $window.FindName("TxtProfileNotes")
+
 function Set-Status([string]$msg) { $TxtStatus.Text = $msg }
 
 function Build-SystemInfoText {
     $fs = if ($script:hasFSLogix) { "FSLogix: Oui" } else { "FSLogix: Non" }
+    $upd = if ($script:hasUPD) { "UPD: Oui" } else { "UPD: Non" }
+    $roaming = if ($script:hasRoamingProfiles) { "Roaming: Oui" } else { "Roaming: Non" }
     $type = if ($script:isServer) { "Type: Server" } else { "Type: Workstation" }
     $modern = if ($script:isModernBuild) { "Build moderne: Oui (>= 17763)" } else { "Build moderne: Non (< 17763)" }
-    return "$($script:osCaption) | Version $($script:osVersion) (Build $($script:osBuild)) | $type | $modern | $fs"
+    return "$($script:osCaption) | Version $($script:osVersion) (Build $($script:osBuild)) | $type | $modern | $fs | $upd | $roaming"
+}
+
+function Update-ProfileSelector {
+    # Update detected profile indicator
+    $TxtDetectedProfile.Text = "(Détecté: $($script:detectedProfileType))"
+
+    # Select the appropriate ComboBox item based on selected profile type
+    $profileMapping = @{
+        "Local" = 0
+        "FSLogix" = 1
+        "UPD" = 2
+        "Roaming" = 3
+    }
+
+    $index = $profileMapping[$script:selectedProfileType]
+    if ($null -ne $index) {
+        $CmbProfileType.SelectedIndex = $index
+    }
+
+    # Update description and notes
+    $recs = $ProfileRecommendations[$script:selectedProfileType]
+    if ($recs) {
+        $TxtProfileDescription.Text = $recs.Description
+        $TxtProfileNotes.Text = $recs.Notes
+    }
+}
+
+function Set-ProfileType([string]$profileType) {
+    $script:selectedProfileType = $profileType
+
+    # Update description and notes
+    $recs = $ProfileRecommendations[$profileType]
+    if ($recs) {
+        $TxtProfileDescription.Text = $recs.Description
+        $TxtProfileNotes.Text = $recs.Notes
+    }
+
+    # Refresh the settings grid to show updated recommendations
+    Refresh-Tweaks
 }
 
 # Bind data
@@ -1868,6 +2085,18 @@ $BtnBackup.Add_Click({
 # -------------------------
 # Events - Tweaks tab
 # -------------------------
+
+# Profile type selector
+$CmbProfileType.Add_SelectionChanged({
+    $selectedItem = $CmbProfileType.SelectedItem
+    if ($selectedItem) {
+        $tag = $selectedItem.Tag
+        if ($tag -and $tag -ne $script:selectedProfileType) {
+            Set-ProfileType $tag
+        }
+    }
+})
+
 $BtnRefreshTweaks.Add_Click({
     try { Refresh-Tweaks } catch {
         Set-Status "Erreur: $($_.Exception.Message)"
@@ -2451,6 +2680,7 @@ $BtnRestartWSearchMaint.Add_Click({
 # -------------------------
 # Start
 # -------------------------
+Update-ProfileSelector
 Set-Status "Prêt."
 $TxtHint.Text = ""
 $window.ShowDialog() | Out-Null
