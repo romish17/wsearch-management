@@ -1306,336 +1306,16 @@ function Repair-SearchService {
 [xml]$Xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Windows Search Tuner" Height="800" Width="1320"
-        WindowStartupLocation="CenterScreen"
-        Background="#1E1E2E">
-    <Window.Resources>
-        <!-- Color Palette -->
-        <Color x:Key="PrimaryColor">#0078D4</Color>
-        <Color x:Key="SecondaryColor">#5C2D91</Color>
-        <Color x:Key="SuccessColor">#10B981</Color>
-        <Color x:Key="WarningColor">#F59E0B</Color>
-        <Color x:Key="DangerColor">#EF4444</Color>
-        <Color x:Key="InfoColor">#3B82F6</Color>
-        <Color x:Key="SurfaceColor">#2D2D3D</Color>
-        <Color x:Key="SurfaceLightColor">#3D3D4D</Color>
-        <Color x:Key="TextColor">#E4E4E7</Color>
-        <Color x:Key="TextMutedColor">#A1A1AA</Color>
-
-        <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource PrimaryColor}"/>
-        <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource SecondaryColor}"/>
-        <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}"/>
-        <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}"/>
-        <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}"/>
-        <SolidColorBrush x:Key="InfoBrush" Color="{StaticResource InfoColor}"/>
-        <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
-        <SolidColorBrush x:Key="SurfaceLightBrush" Color="{StaticResource SurfaceLightColor}"/>
-        <SolidColorBrush x:Key="TextBrush" Color="{StaticResource TextColor}"/>
-        <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMutedColor}"/>
-
-        <!-- Button Base Style -->
-        <Style x:Key="ModernButton" TargetType="Button">
-            <Setter Property="Background" Value="{StaticResource SurfaceLightBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}"
-                                BorderThickness="1" BorderBrush="Transparent">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#4D4D5D"/>
-                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#5D5D6D"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Primary Button -->
-        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
-            <Setter Property="Background" Value="{StaticResource PrimaryBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#1E88E5"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#1565C0"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Success Button -->
-        <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
-            <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#059669"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#047857"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Warning Button -->
-        <Style x:Key="WarningButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
-            <Setter Property="Background" Value="{StaticResource WarningBrush}"/>
-            <Setter Property="Foreground" Value="#1E1E2E"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#D97706"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#B45309"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Danger Button -->
-        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
-            <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#DC2626"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#B91C1C"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Info Button -->
-        <Style x:Key="InfoButton" TargetType="Button" BasedOn="{StaticResource ModernButton}">
-            <Setter Property="Background" Value="{StaticResource InfoBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#2563EB"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#1D4ED8"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- TabControl Style -->
-        <Style TargetType="TabControl">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-
-        <Style TargetType="TabItem">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
-            <Setter Property="Padding" Value="16,10"/>
-            <Setter Property="Margin" Value="0,0,2,0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="TabItem">
-                        <Border x:Name="border" Background="{TemplateBinding Background}"
-                                CornerRadius="8,8,0,0" Padding="{TemplateBinding Padding}"
-                                BorderThickness="1,1,1,0" BorderBrush="Transparent">
-                            <ContentPresenter x:Name="content" ContentSource="Header"
-                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="border" Property="Background">
-                                    <Setter.Value>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                            <GradientStop Color="#0078D4" Offset="0"/>
-                                            <GradientStop Color="#5C2D91" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Setter.Value>
-                                </Setter>
-                                <Setter Property="Foreground" Value="White"/>
-                                <Setter TargetName="content" Property="TextElement.FontWeight" Value="SemiBold"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="{StaticResource SurfaceLightBrush}"/>
-                            </Trigger>
-                            <MultiTrigger>
-                                <MultiTrigger.Conditions>
-                                    <Condition Property="IsSelected" Value="True"/>
-                                    <Condition Property="IsMouseOver" Value="True"/>
-                                </MultiTrigger.Conditions>
-                                <MultiTrigger.Setters>
-                                    <Setter TargetName="border" Property="Background">
-                                        <Setter.Value>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                <GradientStop Color="#1E88E5" Offset="0"/>
-                                                <GradientStop Color="#7B1FA2" Offset="1"/>
-                                            </LinearGradientBrush>
-                                        </Setter.Value>
-                                    </Setter>
-                                </MultiTrigger.Setters>
-                            </MultiTrigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- DataGrid Style -->
-        <Style TargetType="DataGrid">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource SurfaceLightBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="RowBackground" Value="{StaticResource SurfaceBrush}"/>
-            <Setter Property="AlternatingRowBackground" Value="#252535"/>
-            <Setter Property="HorizontalGridLinesBrush" Value="#3D3D4D"/>
-            <Setter Property="VerticalGridLinesBrush" Value="#3D3D4D"/>
-        </Style>
-
-        <Style TargetType="DataGridColumnHeader">
-            <Setter Property="Background">
-                <Setter.Value>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#0078D4" Offset="0"/>
-                        <GradientStop Color="#5C2D91" Offset="1"/>
-                    </LinearGradientBrush>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="BorderThickness" Value="0,0,1,0"/>
-            <Setter Property="BorderBrush" Value="#4D4D5D"/>
-        </Style>
-
-        <Style TargetType="DataGridCell">
-            <Setter Property="Padding" Value="8,4"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            <Style.Triggers>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#0078D4"/>
-                    <Setter Property="Foreground" Value="White"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style TargetType="DataGridRow">
-            <Style.Triggers>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#0078D4"/>
-                </Trigger>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#3D3D4D"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <!-- TextBlock Style -->
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-        </Style>
-
-        <!-- TextBox Style -->
-        <Style TargetType="TextBox">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource SurfaceLightBrush}"/>
-            <Setter Property="Padding" Value="8,6"/>
-            <Setter Property="BorderThickness" Value="1"/>
-        </Style>
-
-        <!-- ComboBox Style -->
-        <Style TargetType="ComboBox">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource SurfaceLightBrush}"/>
-            <Setter Property="Padding" Value="8,6"/>
-        </Style>
-
-        <!-- CheckBox Style -->
-        <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-        </Style>
-    </Window.Resources>
-
-    <Grid Margin="12">
+        Title="Windows Search Tuner (Adaptive + DB)" Height="800" Width="1320"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <Border Grid.Row="0" CornerRadius="10" Padding="16" Margin="0,0,0,12">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                    <GradientStop Color="#0078D4" Offset="0"/>
-                    <GradientStop Color="#5C2D91" Offset="0.5"/>
-                    <GradientStop Color="#B5179E" Offset="1"/>
-                </LinearGradientBrush>
-            </Border.Background>
+        <Border BorderBrush="#444" BorderThickness="1" CornerRadius="6" Padding="10" Grid.Row="0" Margin="0,0,0,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -1643,92 +1323,76 @@ function Repair-SearchService {
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Vertical">
-                    <TextBlock FontSize="22" FontWeight="Bold" Foreground="White">Windows Search Tuner</TextBlock>
-                    <TextBlock x:Name="TxtSystemInfo" Foreground="#E0E0E0" Opacity="0.9" Margin="0,4,0,0"/>
+                    <TextBlock FontSize="18" FontWeight="SemiBold">Windows Search Tuner (Adaptive + DB)</TextBlock>
+                    <TextBlock x:Name="TxtSystemInfo" Opacity="0.85"/>
                 </StackPanel>
 
-                <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Button x:Name="BtnBackup" Content="Backup .reg" Style="{StaticResource ModernButton}"/>
-                    <Button x:Name="BtnRestartWSearchTop" Content="Restart WSearch" Style="{StaticResource WarningButton}"/>
-                    <Button x:Name="BtnOpenServices" Content="services.msc" Style="{StaticResource ModernButton}"/>
+                <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right">
+                    <Button x:Name="BtnBackup" Content="Backup .reg" Margin="4" Padding="12,6"/>
+                    <Button x:Name="BtnRestartWSearchTop" Content="Restart WSearch" Margin="4" Padding="12,6"/>
+                    <Button x:Name="BtnOpenServices" Content="services.msc" Margin="4" Padding="12,6"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Main Content -->
-        <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="0">
-            <TabControl x:Name="TabsMain">
-                <TabItem Header="Tweaks">
-                    <Grid Margin="12">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
+        <TabControl Grid.Row="1" x:Name="TabsMain">
+            <TabItem Header="Tweaks">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
-                        <!-- Profile Selection Panel -->
-                        <Border CornerRadius="8" Padding="12" Grid.Row="0" Margin="0,0,0,10">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="#1A0078D4" Offset="0"/>
-                                    <GradientStop Color="#1A5C2D91" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Border.Background>
-                            <Border.BorderBrush>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="#0078D4" Offset="0"/>
-                                    <GradientStop Color="#5C2D91" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Border.BorderBrush>
-                            <Border.BorderThickness>1</Border.BorderThickness>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
+                    <!-- Panneau sélection type de profil -->
+                    <Border BorderBrush="#0078D4" BorderThickness="1" CornerRadius="6" Padding="10" Grid.Row="0" Margin="0,0,0,8" Background="#1A0078D4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                                <StackPanel Orientation="Horizontal" Grid.Column="0" Grid.Row="0" VerticalAlignment="Center">
-                                    <TextBlock Text="Type de profil:" FontWeight="SemiBold" Margin="0,0,12,0" VerticalAlignment="Center"/>
-                                    <ComboBox x:Name="CmbProfileType" Width="160" Margin="0,0,15,0" VerticalAlignment="Center">
-                                        <ComboBoxItem Content="Local" Tag="Local"/>
-                                        <ComboBoxItem Content="FSLogix" Tag="FSLogix"/>
-                                        <ComboBoxItem Content="UPD (RDS)" Tag="UPD"/>
-                                        <ComboBoxItem Content="Profils itinérants" Tag="Roaming"/>
-                                    </ComboBox>
-                                    <TextBlock x:Name="TxtDetectedProfile" Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center" Margin="0,0,20,0"/>
-                                </StackPanel>
+                            <StackPanel Orientation="Horizontal" Grid.Column="0" Grid.Row="0" VerticalAlignment="Center">
+                                <TextBlock Text="Type de profil:" FontWeight="SemiBold" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="CmbProfileType" Width="150" Margin="0,0,15,0" VerticalAlignment="Center">
+                                    <ComboBoxItem Content="Local" Tag="Local"/>
+                                    <ComboBoxItem Content="FSLogix" Tag="FSLogix"/>
+                                    <ComboBoxItem Content="UPD (RDS)" Tag="UPD"/>
+                                    <ComboBoxItem Content="Profils itinérants" Tag="Roaming"/>
+                                </ComboBox>
+                                <TextBlock x:Name="TxtDetectedProfile" Opacity="0.8" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                            </StackPanel>
 
-                                <TextBlock x:Name="TxtProfileDescription" Grid.Column="1" Grid.Row="0" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" FontStyle="Italic"/>
+                            <TextBlock x:Name="TxtProfileDescription" Grid.Column="1" Grid.Row="0" Opacity="0.9" VerticalAlignment="Center" FontStyle="Italic"/>
 
-                                <TextBlock x:Name="TxtProfileNotes" Grid.ColumnSpan="2" Grid.Row="1" TextWrapping="Wrap" Margin="0,10,0,0" Foreground="{StaticResource WarningBrush}"/>
-                            </Grid>
-                        </Border>
+                            <TextBlock x:Name="TxtProfileNotes" Grid.ColumnSpan="2" Grid.Row="1" TextWrapping="Wrap" Opacity="0.85" Margin="0,8,0,0" Foreground="#FF9800"/>
+                        </Grid>
+                    </Border>
 
-                        <!-- Actions Panel -->
-                        <Border Background="{StaticResource SurfaceLightBrush}" CornerRadius="8" Padding="12" Grid.Row="1" Margin="0,0,0,10">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="8" Grid.Row="1" Margin="0,0,0,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                                <TextBlock Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" VerticalAlignment="Center">
-                                    Conseil: clique "Charger recommandés" puis "Appliquer tout (Desired)".
-                                    Utilise (Remove) pour revenir à "Non configuré" sur les clés policy.
-                                </TextBlock>
+                            <TextBlock Opacity="0.9" TextWrapping="Wrap">
+                                Conseil: clique "Charger recommandés" puis "Appliquer tout (Desired)".
+                                Utilise (Remove) pour revenir à "Non configuré" sur les clés policy.
+                            </TextBlock>
 
-                                <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right">
-                                    <Button x:Name="BtnRefreshTweaks" Content="Rafraichir" Style="{StaticResource ModernButton}"/>
-                                    <Button x:Name="BtnLoadRecommended" Content="Charger recommandés" Style="{StaticResource InfoButton}"/>
-                                    <Button x:Name="BtnApplySelected" Content="Appliquer sélection" Style="{StaticResource PrimaryButton}"/>
-                                    <Button x:Name="BtnApplyAll" Content="Appliquer tout" Style="{StaticResource SuccessButton}"/>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
+                            <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right">
+                                <Button x:Name="BtnRefreshTweaks" Content="Rafraîchir" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnLoadRecommended" Content="Charger recommandés" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnApplySelected" Content="Appliquer sélection" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnApplyAll" Content="Appliquer tout (Desired)" Margin="4" Padding="12,6"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
 
                     <DataGrid x:Name="GridSettings" Grid.Row="2"
                               AutoGenerateColumns="False"
@@ -1773,13 +1437,13 @@ function Repair-SearchService {
             </TabItem>
 
             <TabItem Header="Bases (EDB)">
-                <Grid Margin="12">
+                <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <Border Background="{StaticResource SurfaceLightBrush}" CornerRadius="8" Padding="12" Grid.Row="0" Margin="0,0,0,10">
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="8" Grid.Row="0" Margin="0,0,0,8">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -1787,21 +1451,21 @@ function Repair-SearchService {
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Orientation="Vertical">
-                                <TextBlock x:Name="TxtWSearchStatus" FontWeight="SemiBold" Foreground="{StaticResource InfoBrush}"/>
-                                <TextBlock x:Name="TxtPerUserTotalSize" Margin="0,6,0,0" Foreground="{StaticResource SuccessBrush}"/>
-                                <TextBlock Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,6,0,0">
+                                <TextBlock x:Name="TxtWSearchStatus" Opacity="0.9"/>
+                                <TextBlock x:Name="TxtPerUserTotalSize" Opacity="0.9" Margin="0,4,0,0"/>
+                                <TextBlock Opacity="0.85" TextWrapping="Wrap">
                                     Actions: Scan = liste les bases globales et per-user. Supprimer une base forcera une reconstruction.
                                     Recommandé: Stop WSearch avant suppression globale (Windows.edb).
                                 </TextBlock>
                             </StackPanel>
 
-                            <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                <Button x:Name="BtnScanDb" Content="Scanner" Style="{StaticResource PrimaryButton}"/>
-                                <Button x:Name="BtnOpenDbFolder" Content="Ouvrir dossier" Style="{StaticResource ModernButton}"/>
-                                <Button x:Name="BtnStopWSearch" Content="Stop" Style="{StaticResource DangerButton}"/>
-                                <Button x:Name="BtnStartWSearch" Content="Start" Style="{StaticResource SuccessButton}"/>
-                                <Button x:Name="BtnRestartWSearchDb" Content="Restart" Style="{StaticResource WarningButton}"/>
-                                <Button x:Name="BtnDeleteDb" Content="Supprimer sélection" Style="{StaticResource DangerButton}"/>
+                            <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right">
+                                <Button x:Name="BtnScanDb" Content="Scanner" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnOpenDbFolder" Content="Ouvrir dossier" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnStopWSearch" Content="Stop WSearch" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnStartWSearch" Content="Start WSearch" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnRestartWSearchDb" Content="Restart WSearch" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnDeleteDb" Content="Supprimer base sélectionnée" Margin="4" Padding="12,6"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -1814,41 +1478,41 @@ function Repair-SearchService {
                               SelectionUnit="FullRow"
                               GridLinesVisibility="Horizontal"
                               HeadersVisibility="Column"
-                              RowHeight="32">
+                              RowHeight="30">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Scope" Binding="{Binding Scope}" Width="90"/>
-                            <DataGridTextColumn Header="Utilisateur" Binding="{Binding User}" Width="240"/>
+                            <DataGridTextColumn Header="User" Binding="{Binding User}" Width="240"/>
                             <DataGridTextColumn Header="SID" Binding="{Binding SID}" Width="230"/>
-                            <DataGridTextColumn Header="Taille (MB)" Binding="{Binding SizeMB}" Width="95"/>
-                            <DataGridTextColumn Header="Modifié" Binding="{Binding LastWrite}" Width="165"/>
-                            <DataGridTextColumn Header="Chemin" Binding="{Binding Path}" Width="*"/>
+                            <DataGridTextColumn Header="Size (MB)" Binding="{Binding SizeMB}" Width="95"/>
+                            <DataGridTextColumn Header="LastWrite" Binding="{Binding LastWrite}" Width="165"/>
+                            <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
             </TabItem>
 
             <TabItem Header="Logs">
-                <Grid Margin="12">
+                <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <Border Background="{StaticResource SurfaceLightBrush}" CornerRadius="8" Padding="12" Grid.Row="0" Margin="0,0,0,10">
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="8" Grid.Row="0" Margin="0,0,0,8">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
-                            <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,10">
-                                <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold">Filtres:</TextBlock>
-                                <CheckBox x:Name="ChkError" Content="Erreurs" IsChecked="True" Margin="8,0" Foreground="{StaticResource DangerBrush}"/>
-                                <CheckBox x:Name="ChkWarning" Content="Avertissements" IsChecked="True" Margin="8,0" Foreground="{StaticResource WarningBrush}"/>
-                                <CheckBox x:Name="ChkInfo" Content="Information" IsChecked="True" Margin="8,0" Foreground="{StaticResource InfoBrush}"/>
+                            <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,8">
+                                <TextBlock VerticalAlignment="Center" Margin="0,0,8,0">Filtres niveau:</TextBlock>
+                                <CheckBox x:Name="ChkError" Content="Erreurs" IsChecked="True" Margin="4,0"/>
+                                <CheckBox x:Name="ChkWarning" Content="Avertissements" IsChecked="True" Margin="4,0"/>
+                                <CheckBox x:Name="ChkInfo" Content="Information" IsChecked="True" Margin="4,0"/>
 
-                                <TextBlock VerticalAlignment="Center" Margin="25,0,10,0">Max:</TextBlock>
+                                <TextBlock VerticalAlignment="Center" Margin="20,0,8,0">Max events:</TextBlock>
                                 <ComboBox x:Name="CmbMaxEvents" Width="80" SelectedIndex="1">
                                     <ComboBoxItem Content="50"/>
                                     <ComboBoxItem Content="100"/>
@@ -1856,15 +1520,15 @@ function Repair-SearchService {
                                     <ComboBoxItem Content="500"/>
                                 </ComboBox>
 
-                                <TextBlock VerticalAlignment="Center" Margin="25,0,10,0">Recherche:</TextBlock>
-                                <TextBox x:Name="TxtLogFilter" Width="200"/>
+                                <TextBlock VerticalAlignment="Center" Margin="20,0,8,0">Recherche:</TextBlock>
+                                <TextBox x:Name="TxtLogFilter" Width="180" Margin="4,0"/>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Grid.Row="1" HorizontalAlignment="Right">
-                                <Button x:Name="BtnRefreshLogs" Content="Charger logs" Style="{StaticResource PrimaryButton}"/>
-                                <Button x:Name="BtnClearLogFilter" Content="Effacer filtre" Style="{StaticResource ModernButton}"/>
-                                <Button x:Name="BtnExportLogs" Content="Exporter CSV" Style="{StaticResource SuccessButton}"/>
-                                <Button x:Name="BtnOpenEventViewer" Content="Event Viewer" Style="{StaticResource InfoButton}"/>
+                                <Button x:Name="BtnRefreshLogs" Content="Charger les logs" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnClearLogFilter" Content="Effacer filtre" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnExportLogs" Content="Exporter CSV" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnOpenEventViewer" Content="Event Viewer" Margin="4" Padding="12,6"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -1943,28 +1607,14 @@ function Repair-SearchService {
             </TabItem>
 
             <TabItem Header="Index Status">
-                <Grid Margin="12">
+                <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Status Cards -->
-                    <Border CornerRadius="8" Padding="16" Grid.Row="0" Margin="0,0,0,10">
-                        <Border.Background>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                <GradientStop Color="#1A10B981" Offset="0"/>
-                                <GradientStop Color="#1A3B82F6" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Border.Background>
-                        <Border.BorderBrush>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                <GradientStop Color="#10B981" Offset="0"/>
-                                <GradientStop Color="#3B82F6" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Border.BorderBrush>
-                        <Border.BorderThickness>1</Border.BorderThickness>
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="12" Grid.Row="0" Margin="0,0,0,8">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -1972,12 +1622,12 @@ function Repair-SearchService {
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Orientation="Vertical">
-                                <TextBlock FontWeight="Bold" FontSize="15" Margin="0,0,0,12" Foreground="{StaticResource SuccessBrush}">Statut de l'indexation Windows Search</TextBlock>
+                                <TextBlock FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8">Statut de l'indexation Windows Search</TextBlock>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="180"/>
-                                        <ColumnDefinition Width="180"/>
-                                        <ColumnDefinition Width="180"/>
+                                        <ColumnDefinition Width="200"/>
+                                        <ColumnDefinition Width="200"/>
+                                        <ColumnDefinition Width="200"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
@@ -1986,37 +1636,37 @@ function Repair-SearchService {
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Service WSearch:</TextBlock>
-                                    <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtIdxServiceStatus" FontWeight="SemiBold" Margin="0,4" Foreground="{StaticResource SuccessBrush}">-</TextBlock>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,2">Service WSearch:</TextBlock>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtIdxServiceStatus" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="2" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Type démarrage:</TextBlock>
-                                    <TextBlock Grid.Row="0" Grid.Column="3" x:Name="TxtIdxStartType" FontWeight="SemiBold" Margin="0,4">-</TextBlock>
+                                    <TextBlock Grid.Row="0" Grid.Column="2" Margin="0,2">Type démarrage:</TextBlock>
+                                    <TextBlock Grid.Row="0" Grid.Column="3" x:Name="TxtIdxStartType" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Statut catalogue:</TextBlock>
-                                    <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtIdxCatalogStatus" FontWeight="SemiBold" Margin="0,4" Foreground="{StaticResource InfoBrush}">-</TextBlock>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2">Statut catalogue:</TextBlock>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtIdxCatalogStatus" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Éléments indexés:</TextBlock>
-                                    <TextBlock Grid.Row="1" Grid.Column="3" x:Name="TxtIdxItemsCount" FontWeight="SemiBold" Margin="0,4" Foreground="{StaticResource PrimaryBrush}">-</TextBlock>
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,2">Éléments indexés:</TextBlock>
+                                    <TextBlock Grid.Row="1" Grid.Column="3" x:Name="TxtIdxItemsCount" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Taille index:</TextBlock>
-                                    <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TxtIdxSizeMB" FontWeight="SemiBold" Margin="0,4">-</TextBlock>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,2">Taille index (MB):</TextBlock>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TxtIdxSizeMB" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="2" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Dernière MAJ:</TextBlock>
-                                    <TextBlock Grid.Row="2" Grid.Column="3" x:Name="TxtIdxLastUpdate" FontWeight="SemiBold" Margin="0,4">-</TextBlock>
+                                    <TextBlock Grid.Row="2" Grid.Column="2" Margin="0,2">Dernière MAJ:</TextBlock>
+                                    <TextBlock Grid.Row="2" Grid.Column="3" x:Name="TxtIdxLastUpdate" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
                                 </Grid>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Top">
-                                <Button x:Name="BtnRefreshIndexStatus" Content="Rafraichir" Style="{StaticResource PrimaryButton}"/>
-                                <Button x:Name="BtnOpenIndexOptions" Content="Options indexation" Style="{StaticResource InfoButton}"/>
+                                <Button x:Name="BtnRefreshIndexStatus" Content="Rafraîchir statut" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnOpenIndexOptions" Content="Options d'indexation" Margin="4" Padding="12,6"/>
                             </StackPanel>
                         </Grid>
                     </Border>
 
-                    <Border Background="{StaticResource SurfaceLightBrush}" CornerRadius="8" Padding="12" Grid.Row="1" Margin="0,0,0,10">
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="8" Grid.Row="1" Margin="0,0,0,8">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,20,0">Emplacements indexés:</TextBlock>
-                            <Button x:Name="BtnRefreshLocations" Content="Charger emplacements" Style="{StaticResource PrimaryButton}"/>
+                            <Button x:Name="BtnRefreshLocations" Content="Charger emplacements" Margin="4" Padding="12,6"/>
                         </StackPanel>
                     </Border>
 
@@ -2028,7 +1678,7 @@ function Repair-SearchService {
                               SelectionUnit="FullRow"
                               GridLinesVisibility="Horizontal"
                               HeadersVisibility="Column"
-                              RowHeight="30">
+                              RowHeight="28">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="100"/>
                             <DataGridTextColumn Header="Chemin / URL" Binding="{Binding Path}" Width="*"/>
@@ -2037,11 +1687,10 @@ function Repair-SearchService {
                                     <Style TargetType="TextBlock">
                                         <Style.Triggers>
                                             <Trigger Property="Text" Value="Oui">
-                                                <Setter Property="Foreground" Value="#10B981"/>
-                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                <Setter Property="Foreground" Value="#44FF44"/>
                                             </Trigger>
                                             <Trigger Property="Text" Value="Non">
-                                                <Setter Property="Foreground" Value="#EF4444"/>
+                                                <Setter Property="Foreground" Value="#FF4444"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>
@@ -2054,28 +1703,14 @@ function Repair-SearchService {
             </TabItem>
 
             <TabItem Header="Maintenance">
-                <Grid Margin="12">
+                <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Header Panel -->
-                    <Border CornerRadius="8" Padding="14" Grid.Row="0" Margin="0,0,0,10">
-                        <Border.Background>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                <GradientStop Color="#1AEF4444" Offset="0"/>
-                                <GradientStop Color="#1AF59E0B" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Border.Background>
-                        <Border.BorderBrush>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                <GradientStop Color="#EF4444" Offset="0"/>
-                                <GradientStop Color="#F59E0B" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Border.BorderBrush>
-                        <Border.BorderThickness>1</Border.BorderThickness>
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="12" Grid.Row="0" Margin="0,0,0,8">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -2083,21 +1718,20 @@ function Repair-SearchService {
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Orientation="Vertical">
-                                <TextBlock FontWeight="Bold" FontSize="15" Margin="0,0,0,8" Foreground="{StaticResource WarningBrush}">Actions de maintenance et réparation</TextBlock>
-                                <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}">
+                                <TextBlock FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8">Actions de maintenance et réparation</TextBlock>
+                                <TextBlock TextWrapping="Wrap" Opacity="0.85">
                                     Utilisez ces outils pour diagnostiquer et réparer les problèmes courants de Windows Search.
                                     ATTENTION: Certaines actions peuvent nécessiter une reconstruction complète de l'index (plusieurs heures).
                                 </TextBlock>
                             </StackPanel>
 
-                            <StackPanel Orientation="Vertical" Grid.Column="1" VerticalAlignment="Center">
-                                <Button x:Name="BtnRunDiagnostics" Content="Lancer diagnostic" Style="{StaticResource WarningButton}" FontWeight="SemiBold"/>
+                            <StackPanel Orientation="Vertical" Grid.Column="1" VerticalAlignment="Top">
+                                <Button x:Name="BtnRunDiagnostics" Content="Lancer le diagnostic" Margin="4" Padding="12,6" FontWeight="SemiBold"/>
                             </StackPanel>
                         </Grid>
                     </Border>
 
-                    <!-- Actions Panel -->
-                    <Border Background="{StaticResource SurfaceLightBrush}" CornerRadius="8" Padding="14" Grid.Row="1" Margin="0,0,0,10">
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="12" Grid.Row="1" Margin="0,0,0,8">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -2106,51 +1740,50 @@ function Repair-SearchService {
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
-                            <StackPanel Grid.Column="0" Margin="6">
-                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{StaticResource PrimaryBrush}">Index Global</TextBlock>
-                                <Button x:Name="BtnRebuildIndex" Content="Reconstruire index" Style="{StaticResource DangerButton}"
+                            <StackPanel Grid.Column="0" Margin="4">
+                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Index Global</TextBlock>
+                                <Button x:Name="BtnRebuildIndex" Content="Reconstruire l'index" Margin="0,2" Padding="8,6"
                                         ToolTip="Supprime Windows.edb et force une reconstruction complète de l'index (peut prendre plusieurs heures)"/>
-                                <Button x:Name="BtnRepairService" Content="Réparer service" Style="{StaticResource WarningButton}"
+                                <Button x:Name="BtnRepairService" Content="Réparer le service" Margin="0,2" Padding="8,6"
                                         ToolTip="Réinitialise la configuration du service et ré-enregistre les composants"/>
                             </StackPanel>
 
-                            <StackPanel Grid.Column="1" Margin="6">
-                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{StaticResource SecondaryBrush}">Catalogues Per-User</TextBlock>
-                                <TextBlock FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6" TextWrapping="Wrap">FSLogix: déconnecter les utilisateurs ou cocher l'option ci-dessous</TextBlock>
-                                <CheckBox x:Name="ChkStopWSearchBeforeDelete" Content="Arrêter WSearch avant" Margin="0,4" IsChecked="True"
+                            <StackPanel Grid.Column="1" Margin="4">
+                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Catalogues Per-User</TextBlock>
+                                <TextBlock FontSize="10" Opacity="0.7" Margin="0,0,0,4" TextWrapping="Wrap">FSLogix: déconnecter les utilisateurs ou cocher l'option ci-dessous</TextBlock>
+                                <CheckBox x:Name="ChkStopWSearchBeforeDelete" Content="Arrêter WSearch avant" Margin="0,2" IsChecked="True"
                                           ToolTip="Arrête le service WSearch avant la suppression pour débloquer les fichiers verrouillés"/>
-                                <Button x:Name="BtnDeleteAllPerUser" Content="Supprimer tous" Style="{StaticResource DangerButton}"
+                                <Button x:Name="BtnDeleteAllPerUser" Content="Supprimer tous" Margin="0,2" Padding="8,6"
                                         ToolTip="Supprime tous les catalogues per-user. Le service WSearch sera arrêté si l'option est cochée."/>
-                                <Button x:Name="BtnDeleteSelectedPerUser" Content="Supprimer sélectionné" Style="{StaticResource ModernButton}"
+                                <Button x:Name="BtnDeleteSelectedPerUser" Content="Supprimer sélectionné" Margin="0,2" Padding="8,6"
                                         ToolTip="Supprime le catalogue sélectionné dans le diagnostic (ligne PUC)"/>
-                                <Button x:Name="BtnShowConnectedUsers" Content="Utilisateurs connectés" Style="{StaticResource InfoButton}"
+                                <Button x:Name="BtnShowConnectedUsers" Content="Utilisateurs connectés" Margin="0,2" Padding="8,6"
                                         ToolTip="Affiche la liste des utilisateurs actuellement connectés"/>
                             </StackPanel>
 
-                            <StackPanel Grid.Column="2" Margin="6">
-                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{StaticResource InfoBrush}">Journal USN</TextBlock>
-                                <TextBlock FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6" TextWrapping="Wrap">Journal NTFS qui enregistre les modifications de fichiers. Windows Search l'utilise pour détecter les fichiers modifiés. Erreur 3079 = quota insuffisant.</TextBlock>
-                                <Button x:Name="BtnResetUSN" Content="Réinitialiser USN (C:)" Style="{StaticResource WarningButton}"
+                            <StackPanel Grid.Column="2" Margin="4">
+                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Journal USN (Update Sequence Number)</TextBlock>
+                                <TextBlock FontSize="10" Opacity="0.7" Margin="0,0,0,4" TextWrapping="Wrap">Journal NTFS qui enregistre les modifications de fichiers. Windows Search l'utilise pour détecter les fichiers modifiés. Erreur 3079 = quota insuffisant.</TextBlock>
+                                <Button x:Name="BtnResetUSN" Content="Réinitialiser USN (C:)" Margin="0,2" Padding="8,6"
                                         ToolTip="Supprime et recrée le journal USN sur C:. Corrige l'erreur 3079. Redémarrer WSearch après."/>
                             </StackPanel>
 
-                            <StackPanel Grid.Column="3" Margin="6">
-                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{StaticResource SuccessBrush}">Service WSearch</TextBlock>
-                                <Button x:Name="BtnStopWSearchMaint" Content="Arrêter" Style="{StaticResource DangerButton}"/>
-                                <Button x:Name="BtnStartWSearchMaint" Content="Démarrer" Style="{StaticResource SuccessButton}"/>
-                                <Button x:Name="BtnRestartWSearchMaint" Content="Redémarrer" Style="{StaticResource WarningButton}"/>
+                            <StackPanel Grid.Column="3" Margin="4">
+                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Service WSearch</TextBlock>
+                                <Button x:Name="BtnStopWSearchMaint" Content="Arrêter" Margin="0,2" Padding="8,6"/>
+                                <Button x:Name="BtnStartWSearchMaint" Content="Démarrer" Margin="0,2" Padding="8,6"/>
+                                <Button x:Name="BtnRestartWSearchMaint" Content="Redémarrer" Margin="0,2" Padding="8,6"/>
                             </StackPanel>
                         </Grid>
                     </Border>
 
-                    <!-- Diagnostics Grid -->
                     <Grid Grid.Row="2">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" FontWeight="SemiBold" Margin="0,0,0,10" Foreground="{StaticResource WarningBrush}">Résultats du diagnostic (erreurs des 7 derniers jours):</TextBlock>
+                        <TextBlock Grid.Row="0" FontWeight="SemiBold" Margin="0,0,0,8">Résultats du diagnostic (erreurs des 7 derniers jours):</TextBlock>
 
                         <DataGrid x:Name="GridDiagnostics" Grid.Row="1"
                                   AutoGenerateColumns="False"
@@ -2193,32 +1826,15 @@ function Repair-SearchService {
             </TabItem>
         </TabControl>
 
-        <!-- Status Bar -->
-        <Border Grid.Row="2" CornerRadius="10" Padding="14" Margin="0,12,0,0">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                    <GradientStop Color="#2D2D3D" Offset="0"/>
-                    <GradientStop Color="#3D3D4D" Offset="1"/>
-                </LinearGradientBrush>
-            </Border.Background>
-            <Border.BorderBrush>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                    <GradientStop Color="#0078D4" Offset="0"/>
-                    <GradientStop Color="#5C2D91" Offset="1"/>
-                </LinearGradientBrush>
-            </Border.BorderBrush>
-            <Border.BorderThickness>1</Border.BorderThickness>
+        <Border Grid.Row="2" BorderBrush="#444" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,10,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Status:" FontWeight="SemiBold" Margin="0,0,8,0"/>
-                    <TextBlock x:Name="TxtStatus" VerticalAlignment="Center" Foreground="{StaticResource SuccessBrush}">Prêt.</TextBlock>
-                </StackPanel>
-                <TextBlock Grid.Column="1" x:Name="TxtHint" VerticalAlignment="Center" Foreground="{StaticResource WarningBrush}" FontStyle="Italic"/>
+                <TextBlock x:Name="TxtStatus" VerticalAlignment="Center" Opacity="0.9">Prêt.</TextBlock>
+                <TextBlock Grid.Column="1" x:Name="TxtHint" VerticalAlignment="Center" Opacity="0.8"/>
             </Grid>
         </Border>
     </Grid>
