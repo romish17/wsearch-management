@@ -1452,6 +1452,7 @@ function Repair-SearchService {
 
                             <StackPanel Orientation="Vertical">
                                 <TextBlock x:Name="TxtWSearchStatus" Opacity="0.9"/>
+                                <TextBlock x:Name="TxtPerUserTotalSize" Opacity="0.9" Margin="0,4,0,0"/>
                                 <TextBlock Opacity="0.85" TextWrapping="Wrap">
                                     Actions: Scan = liste les bases globales et per-user. Supprimer une base forcera une reconstruction.
                                     Recommandé: Stop WSearch avant suppression globale (Windows.edb).
@@ -1863,6 +1864,7 @@ $BtnApplyAll          = $window.FindName("BtnApplyAll")
 
 # DB tab controls
 $TxtWSearchStatus     = $window.FindName("TxtWSearchStatus")
+$TxtPerUserTotalSize  = $window.FindName("TxtPerUserTotalSize")
 $BtnScanDb            = $window.FindName("BtnScanDb")
 $BtnOpenDbFolder      = $window.FindName("BtnOpenDbFolder")
 $BtnStopWSearch       = $window.FindName("BtnStopWSearch")
@@ -2036,6 +2038,25 @@ function Scan-DbToGrid {
     $items = Scan-SearchDatabases
     $DbRows.Clear()
     foreach ($i in $items) { $DbRows.Add($i) }
+
+    # Calculate per-user total size
+    $perUserItems = $items | Where-Object { $_.Scope -eq "Per-user" }
+    $perUserCount = ($perUserItems | Measure-Object).Count
+    $perUserTotalMB = ($perUserItems | ForEach-Object {
+        $sizeTxt = $_.SizeMB -replace "[^\d\.]", ""
+        if ($sizeTxt) { [double]$sizeTxt } else { 0 }
+    } | Measure-Object -Sum).Sum
+
+    # Calculate global size
+    $globalItem = $items | Where-Object { $_.Scope -eq "Global" } | Select-Object -First 1
+    $globalSizeMB = 0
+    if ($globalItem) {
+        $sizeTxt = $globalItem.SizeMB -replace "[^\d\.]", ""
+        if ($sizeTxt) { $globalSizeMB = [double]$sizeTxt }
+    }
+
+    $TxtPerUserTotalSize.Text = "Index per-user: $perUserCount base(s), Total: $([math]::Round($perUserTotalMB, 2)) MB | Index global: $([math]::Round($globalSizeMB, 2)) MB | Total général: $([math]::Round($perUserTotalMB + $globalSizeMB, 2)) MB"
+
     Set-Status "Scan terminé: $($items.Count) entrée(s)."
 }
 
