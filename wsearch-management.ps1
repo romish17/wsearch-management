@@ -1643,17 +1643,14 @@ function Repair-SearchService {
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Vertical">
-                    <TextBlock FontSize="22" FontWeight="Bold" Foreground="White">
-                        <Run Text="🔍"/>
-                        <Run Text=" Windows Search Tuner"/>
-                    </TextBlock>
+                    <TextBlock FontSize="22" FontWeight="Bold" Foreground="White">Windows Search Tuner</TextBlock>
                     <TextBlock x:Name="TxtSystemInfo" Foreground="#E0E0E0" Opacity="0.9" Margin="0,4,0,0"/>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Button x:Name="BtnBackup" Content="📁 Backup .reg" Style="{StaticResource ModernButton}"/>
-                    <Button x:Name="BtnRestartWSearchTop" Content="🔄 Restart WSearch" Style="{StaticResource WarningButton}"/>
-                    <Button x:Name="BtnOpenServices" Content="⚙️ services.msc" Style="{StaticResource ModernButton}"/>
+                    <Button x:Name="BtnBackup" Content="Backup .reg" Style="{StaticResource ModernButton}"/>
+                    <Button x:Name="BtnRestartWSearchTop" Content="Restart WSearch" Style="{StaticResource WarningButton}"/>
+                    <Button x:Name="BtnOpenServices" Content="services.msc" Style="{StaticResource ModernButton}"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -1661,7 +1658,7 @@ function Repair-SearchService {
         <!-- Main Content -->
         <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="0">
             <TabControl x:Name="TabsMain">
-                <TabItem Header="⚡ Tweaks">
+                <TabItem Header="Tweaks">
                     <Grid Margin="12">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -1695,7 +1692,7 @@ function Repair-SearchService {
                                 </Grid.RowDefinitions>
 
                                 <StackPanel Orientation="Horizontal" Grid.Column="0" Grid.Row="0" VerticalAlignment="Center">
-                                    <TextBlock Text="🖥️ Type de profil:" FontWeight="SemiBold" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Type de profil:" FontWeight="SemiBold" Margin="0,0,12,0" VerticalAlignment="Center"/>
                                     <ComboBox x:Name="CmbProfileType" Width="160" Margin="0,0,15,0" VerticalAlignment="Center">
                                         <ComboBoxItem Content="Local" Tag="Local"/>
                                         <ComboBoxItem Content="FSLogix" Tag="FSLogix"/>
@@ -1720,15 +1717,15 @@ function Repair-SearchService {
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" VerticalAlignment="Center">
-                                    💡 Conseil: clique "Charger recommandés" puis "Appliquer tout (Desired)".
+                                    Conseil: clique "Charger recommandés" puis "Appliquer tout (Desired)".
                                     Utilise (Remove) pour revenir à "Non configuré" sur les clés policy.
                                 </TextBlock>
 
                                 <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right">
-                                    <Button x:Name="BtnRefreshTweaks" Content="🔄 Rafraîchir" Style="{StaticResource ModernButton}"/>
-                                    <Button x:Name="BtnLoadRecommended" Content="📋 Charger recommandés" Style="{StaticResource InfoButton}"/>
-                                    <Button x:Name="BtnApplySelected" Content="✔️ Appliquer sélection" Style="{StaticResource PrimaryButton}"/>
-                                    <Button x:Name="BtnApplyAll" Content="✅ Appliquer tout" Style="{StaticResource SuccessButton}"/>
+                                    <Button x:Name="BtnRefreshTweaks" Content="Rafraichir" Style="{StaticResource ModernButton}"/>
+                                    <Button x:Name="BtnLoadRecommended" Content="Charger recommandés" Style="{StaticResource InfoButton}"/>
+                                    <Button x:Name="BtnApplySelected" Content="Appliquer sélection" Style="{StaticResource PrimaryButton}"/>
+                                    <Button x:Name="BtnApplyAll" Content="Appliquer tout" Style="{StaticResource SuccessButton}"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -1775,7 +1772,7 @@ function Repair-SearchService {
                 </Grid>
             </TabItem>
 
-            <TabItem Header="💾 Bases (EDB)">
+            <TabItem Header="Bases (EDB)">
                 <Grid Margin="12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -1793,18 +1790,18 @@ function Repair-SearchService {
                                 <TextBlock x:Name="TxtWSearchStatus" FontWeight="SemiBold" Foreground="{StaticResource InfoBrush}"/>
                                 <TextBlock x:Name="TxtPerUserTotalSize" Margin="0,6,0,0" Foreground="{StaticResource SuccessBrush}"/>
                                 <TextBlock Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,6,0,0">
-                                    📋 Actions: Scan = liste les bases globales et per-user. Supprimer une base forcera une reconstruction.
-                                    ⚠️ Recommandé: Stop WSearch avant suppression globale (Windows.edb).
+                                    Actions: Scan = liste les bases globales et per-user. Supprimer une base forcera une reconstruction.
+                                    Recommandé: Stop WSearch avant suppression globale (Windows.edb).
                                 </TextBlock>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top">
-                                <Button x:Name="BtnScanDb" Content="🔍 Scanner" Style="{StaticResource PrimaryButton}"/>
-                                <Button x:Name="BtnOpenDbFolder" Content="📂 Ouvrir dossier" Style="{StaticResource ModernButton}"/>
-                                <Button x:Name="BtnStopWSearch" Content="⏹️ Stop" Style="{StaticResource DangerButton}"/>
-                                <Button x:Name="BtnStartWSearch" Content="▶️ Start" Style="{StaticResource SuccessButton}"/>
-                                <Button x:Name="BtnRestartWSearchDb" Content="🔄 Restart" Style="{StaticResource WarningButton}"/>
-                                <Button x:Name="BtnDeleteDb" Content="🗑️ Supprimer sélection" Style="{StaticResource DangerButton}"/>
+                                <Button x:Name="BtnScanDb" Content="Scanner" Style="{StaticResource PrimaryButton}"/>
+                                <Button x:Name="BtnOpenDbFolder" Content="Ouvrir dossier" Style="{StaticResource ModernButton}"/>
+                                <Button x:Name="BtnStopWSearch" Content="Stop" Style="{StaticResource DangerButton}"/>
+                                <Button x:Name="BtnStartWSearch" Content="Start" Style="{StaticResource SuccessButton}"/>
+                                <Button x:Name="BtnRestartWSearchDb" Content="Restart" Style="{StaticResource WarningButton}"/>
+                                <Button x:Name="BtnDeleteDb" Content="Supprimer sélection" Style="{StaticResource DangerButton}"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -1830,7 +1827,7 @@ function Repair-SearchService {
                 </Grid>
             </TabItem>
 
-            <TabItem Header="📜 Logs">
+            <TabItem Header="Logs">
                 <Grid Margin="12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -1846,12 +1843,12 @@ function Repair-SearchService {
                             </Grid.RowDefinitions>
 
                             <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,10">
-                                <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold">🎚️ Filtres:</TextBlock>
-                                <CheckBox x:Name="ChkError" Content="❌ Erreurs" IsChecked="True" Margin="8,0" Foreground="{StaticResource DangerBrush}"/>
-                                <CheckBox x:Name="ChkWarning" Content="⚠️ Avertissements" IsChecked="True" Margin="8,0" Foreground="{StaticResource WarningBrush}"/>
-                                <CheckBox x:Name="ChkInfo" Content="ℹ️ Information" IsChecked="True" Margin="8,0" Foreground="{StaticResource InfoBrush}"/>
+                                <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold">Filtres:</TextBlock>
+                                <CheckBox x:Name="ChkError" Content="Erreurs" IsChecked="True" Margin="8,0" Foreground="{StaticResource DangerBrush}"/>
+                                <CheckBox x:Name="ChkWarning" Content="Avertissements" IsChecked="True" Margin="8,0" Foreground="{StaticResource WarningBrush}"/>
+                                <CheckBox x:Name="ChkInfo" Content="Information" IsChecked="True" Margin="8,0" Foreground="{StaticResource InfoBrush}"/>
 
-                                <TextBlock VerticalAlignment="Center" Margin="25,0,10,0">📊 Max:</TextBlock>
+                                <TextBlock VerticalAlignment="Center" Margin="25,0,10,0">Max:</TextBlock>
                                 <ComboBox x:Name="CmbMaxEvents" Width="80" SelectedIndex="1">
                                     <ComboBoxItem Content="50"/>
                                     <ComboBoxItem Content="100"/>
@@ -1859,15 +1856,15 @@ function Repair-SearchService {
                                     <ComboBoxItem Content="500"/>
                                 </ComboBox>
 
-                                <TextBlock VerticalAlignment="Center" Margin="25,0,10,0">🔎 Recherche:</TextBlock>
+                                <TextBlock VerticalAlignment="Center" Margin="25,0,10,0">Recherche:</TextBlock>
                                 <TextBox x:Name="TxtLogFilter" Width="200"/>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Grid.Row="1" HorizontalAlignment="Right">
-                                <Button x:Name="BtnRefreshLogs" Content="📥 Charger logs" Style="{StaticResource PrimaryButton}"/>
-                                <Button x:Name="BtnClearLogFilter" Content="🧹 Effacer filtre" Style="{StaticResource ModernButton}"/>
-                                <Button x:Name="BtnExportLogs" Content="📄 Exporter CSV" Style="{StaticResource SuccessButton}"/>
-                                <Button x:Name="BtnOpenEventViewer" Content="📋 Event Viewer" Style="{StaticResource InfoButton}"/>
+                                <Button x:Name="BtnRefreshLogs" Content="Charger logs" Style="{StaticResource PrimaryButton}"/>
+                                <Button x:Name="BtnClearLogFilter" Content="Effacer filtre" Style="{StaticResource ModernButton}"/>
+                                <Button x:Name="BtnExportLogs" Content="Exporter CSV" Style="{StaticResource SuccessButton}"/>
+                                <Button x:Name="BtnOpenEventViewer" Content="Event Viewer" Style="{StaticResource InfoButton}"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -1945,7 +1942,7 @@ function Repair-SearchService {
                 </Grid>
             </TabItem>
 
-            <TabItem Header="📊 Index Status">
+            <TabItem Header="Index Status">
                 <Grid Margin="12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -1975,7 +1972,7 @@ function Repair-SearchService {
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Orientation="Vertical">
-                                <TextBlock FontWeight="Bold" FontSize="15" Margin="0,0,0,12" Foreground="{StaticResource SuccessBrush}">📈 Statut de l'indexation Windows Search</TextBlock>
+                                <TextBlock FontWeight="Bold" FontSize="15" Margin="0,0,0,12" Foreground="{StaticResource SuccessBrush}">Statut de l'indexation Windows Search</TextBlock>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="180"/>
@@ -1989,37 +1986,37 @@ function Repair-SearchService {
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">🔧 Service WSearch:</TextBlock>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Service WSearch:</TextBlock>
                                     <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtIdxServiceStatus" FontWeight="SemiBold" Margin="0,4" Foreground="{StaticResource SuccessBrush}">-</TextBlock>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="2" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">⚙️ Type démarrage:</TextBlock>
+                                    <TextBlock Grid.Row="0" Grid.Column="2" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Type démarrage:</TextBlock>
                                     <TextBlock Grid.Row="0" Grid.Column="3" x:Name="TxtIdxStartType" FontWeight="SemiBold" Margin="0,4">-</TextBlock>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">📦 Statut catalogue:</TextBlock>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Statut catalogue:</TextBlock>
                                     <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtIdxCatalogStatus" FontWeight="SemiBold" Margin="0,4" Foreground="{StaticResource InfoBrush}">-</TextBlock>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">📄 Éléments indexés:</TextBlock>
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Éléments indexés:</TextBlock>
                                     <TextBlock Grid.Row="1" Grid.Column="3" x:Name="TxtIdxItemsCount" FontWeight="SemiBold" Margin="0,4" Foreground="{StaticResource PrimaryBrush}">-</TextBlock>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">💾 Taille index:</TextBlock>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Taille index:</TextBlock>
                                     <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TxtIdxSizeMB" FontWeight="SemiBold" Margin="0,4">-</TextBlock>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="2" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">🕐 Dernière MAJ:</TextBlock>
+                                    <TextBlock Grid.Row="2" Grid.Column="2" Margin="0,4" Foreground="{StaticResource TextMutedBrush}">Dernière MAJ:</TextBlock>
                                     <TextBlock Grid.Row="2" Grid.Column="3" x:Name="TxtIdxLastUpdate" FontWeight="SemiBold" Margin="0,4">-</TextBlock>
                                 </Grid>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Top">
-                                <Button x:Name="BtnRefreshIndexStatus" Content="🔄 Rafraîchir" Style="{StaticResource PrimaryButton}"/>
-                                <Button x:Name="BtnOpenIndexOptions" Content="⚙️ Options indexation" Style="{StaticResource InfoButton}"/>
+                                <Button x:Name="BtnRefreshIndexStatus" Content="Rafraichir" Style="{StaticResource PrimaryButton}"/>
+                                <Button x:Name="BtnOpenIndexOptions" Content="Options indexation" Style="{StaticResource InfoButton}"/>
                             </StackPanel>
                         </Grid>
                     </Border>
 
                     <Border Background="{StaticResource SurfaceLightBrush}" CornerRadius="8" Padding="12" Grid.Row="1" Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,20,0">📁 Emplacements indexés:</TextBlock>
-                            <Button x:Name="BtnRefreshLocations" Content="📥 Charger emplacements" Style="{StaticResource PrimaryButton}"/>
+                            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,20,0">Emplacements indexés:</TextBlock>
+                            <Button x:Name="BtnRefreshLocations" Content="Charger emplacements" Style="{StaticResource PrimaryButton}"/>
                         </StackPanel>
                     </Border>
 
@@ -2056,7 +2053,7 @@ function Repair-SearchService {
                 </Grid>
             </TabItem>
 
-            <TabItem Header="🔧 Maintenance">
+            <TabItem Header="Maintenance">
                 <Grid Margin="12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -2086,15 +2083,15 @@ function Repair-SearchService {
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Orientation="Vertical">
-                                <TextBlock FontWeight="Bold" FontSize="15" Margin="0,0,0,8" Foreground="{StaticResource WarningBrush}">🛠️ Actions de maintenance et réparation</TextBlock>
+                                <TextBlock FontWeight="Bold" FontSize="15" Margin="0,0,0,8" Foreground="{StaticResource WarningBrush}">Actions de maintenance et réparation</TextBlock>
                                 <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}">
                                     Utilisez ces outils pour diagnostiquer et réparer les problèmes courants de Windows Search.
-                                    ⚠️ ATTENTION: Certaines actions peuvent nécessiter une reconstruction complète de l'index (plusieurs heures).
+                                    ATTENTION: Certaines actions peuvent nécessiter une reconstruction complète de l'index (plusieurs heures).
                                 </TextBlock>
                             </StackPanel>
 
                             <StackPanel Orientation="Vertical" Grid.Column="1" VerticalAlignment="Center">
-                                <Button x:Name="BtnRunDiagnostics" Content="🔍 Lancer diagnostic" Style="{StaticResource WarningButton}" FontWeight="SemiBold"/>
+                                <Button x:Name="BtnRunDiagnostics" Content="Lancer diagnostic" Style="{StaticResource WarningButton}" FontWeight="SemiBold"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -2110,38 +2107,38 @@ function Repair-SearchService {
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Grid.Column="0" Margin="6">
-                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{StaticResource PrimaryBrush}">📦 Index Global</TextBlock>
-                                <Button x:Name="BtnRebuildIndex" Content="🔄 Reconstruire index" Style="{StaticResource DangerButton}"
+                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{StaticResource PrimaryBrush}">Index Global</TextBlock>
+                                <Button x:Name="BtnRebuildIndex" Content="Reconstruire index" Style="{StaticResource DangerButton}"
                                         ToolTip="Supprime Windows.edb et force une reconstruction complète de l'index (peut prendre plusieurs heures)"/>
-                                <Button x:Name="BtnRepairService" Content="🔧 Réparer service" Style="{StaticResource WarningButton}"
+                                <Button x:Name="BtnRepairService" Content="Réparer service" Style="{StaticResource WarningButton}"
                                         ToolTip="Réinitialise la configuration du service et ré-enregistre les composants"/>
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Margin="6">
-                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{StaticResource SecondaryBrush}">👤 Catalogues Per-User</TextBlock>
+                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{StaticResource SecondaryBrush}">Catalogues Per-User</TextBlock>
                                 <TextBlock FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6" TextWrapping="Wrap">FSLogix: déconnecter les utilisateurs ou cocher l'option ci-dessous</TextBlock>
-                                <CheckBox x:Name="ChkStopWSearchBeforeDelete" Content="⏹️ Arrêter WSearch avant" Margin="0,4" IsChecked="True"
+                                <CheckBox x:Name="ChkStopWSearchBeforeDelete" Content="Arrêter WSearch avant" Margin="0,4" IsChecked="True"
                                           ToolTip="Arrête le service WSearch avant la suppression pour débloquer les fichiers verrouillés"/>
-                                <Button x:Name="BtnDeleteAllPerUser" Content="🗑️ Supprimer tous" Style="{StaticResource DangerButton}"
+                                <Button x:Name="BtnDeleteAllPerUser" Content="Supprimer tous" Style="{StaticResource DangerButton}"
                                         ToolTip="Supprime tous les catalogues per-user. Le service WSearch sera arrêté si l'option est cochée."/>
-                                <Button x:Name="BtnDeleteSelectedPerUser" Content="🗑️ Supprimer sélectionné" Style="{StaticResource ModernButton}"
+                                <Button x:Name="BtnDeleteSelectedPerUser" Content="Supprimer sélectionné" Style="{StaticResource ModernButton}"
                                         ToolTip="Supprime le catalogue sélectionné dans le diagnostic (ligne PUC)"/>
-                                <Button x:Name="BtnShowConnectedUsers" Content="👥 Utilisateurs connectés" Style="{StaticResource InfoButton}"
+                                <Button x:Name="BtnShowConnectedUsers" Content="Utilisateurs connectés" Style="{StaticResource InfoButton}"
                                         ToolTip="Affiche la liste des utilisateurs actuellement connectés"/>
                             </StackPanel>
 
                             <StackPanel Grid.Column="2" Margin="6">
-                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{StaticResource InfoBrush}">📝 Journal USN</TextBlock>
+                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4" Foreground="{StaticResource InfoBrush}">Journal USN</TextBlock>
                                 <TextBlock FontSize="10" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6" TextWrapping="Wrap">Journal NTFS qui enregistre les modifications de fichiers. Windows Search l'utilise pour détecter les fichiers modifiés. Erreur 3079 = quota insuffisant.</TextBlock>
-                                <Button x:Name="BtnResetUSN" Content="🔄 Réinitialiser USN (C:)" Style="{StaticResource WarningButton}"
+                                <Button x:Name="BtnResetUSN" Content="Réinitialiser USN (C:)" Style="{StaticResource WarningButton}"
                                         ToolTip="Supprime et recrée le journal USN sur C:. Corrige l'erreur 3079. Redémarrer WSearch après."/>
                             </StackPanel>
 
                             <StackPanel Grid.Column="3" Margin="6">
-                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{StaticResource SuccessBrush}">⚙️ Service WSearch</TextBlock>
-                                <Button x:Name="BtnStopWSearchMaint" Content="⏹️ Arrêter" Style="{StaticResource DangerButton}"/>
-                                <Button x:Name="BtnStartWSearchMaint" Content="▶️ Démarrer" Style="{StaticResource SuccessButton}"/>
-                                <Button x:Name="BtnRestartWSearchMaint" Content="🔄 Redémarrer" Style="{StaticResource WarningButton}"/>
+                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{StaticResource SuccessBrush}">Service WSearch</TextBlock>
+                                <Button x:Name="BtnStopWSearchMaint" Content="Arrêter" Style="{StaticResource DangerButton}"/>
+                                <Button x:Name="BtnStartWSearchMaint" Content="Démarrer" Style="{StaticResource SuccessButton}"/>
+                                <Button x:Name="BtnRestartWSearchMaint" Content="Redémarrer" Style="{StaticResource WarningButton}"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -2153,7 +2150,7 @@ function Repair-SearchService {
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" FontWeight="SemiBold" Margin="0,0,0,10" Foreground="{StaticResource WarningBrush}">📋 Résultats du diagnostic (erreurs des 7 derniers jours):</TextBlock>
+                        <TextBlock Grid.Row="0" FontWeight="SemiBold" Margin="0,0,0,10" Foreground="{StaticResource WarningBrush}">Résultats du diagnostic (erreurs des 7 derniers jours):</TextBlock>
 
                         <DataGrid x:Name="GridDiagnostics" Grid.Row="1"
                                   AutoGenerateColumns="False"
@@ -2218,7 +2215,7 @@ function Repair-SearchService {
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="💬" Margin="0,0,8,0"/>
+                    <TextBlock Text="Status:" FontWeight="SemiBold" Margin="0,0,8,0"/>
                     <TextBlock x:Name="TxtStatus" VerticalAlignment="Center" Foreground="{StaticResource SuccessBrush}">Prêt.</TextBlock>
                 </StackPanel>
                 <TextBlock Grid.Column="1" x:Name="TxtHint" VerticalAlignment="Center" Foreground="{StaticResource WarningBrush}" FontStyle="Italic"/>
