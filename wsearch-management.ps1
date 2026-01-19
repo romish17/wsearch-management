@@ -884,56 +884,205 @@ function Invoke-RebuildSearchIndex {
 function Remove-PerUserCatalogs {
     param(
         [string]$UserProfile = "",
-        [switch]$All
+        [string]$SpecificFile = "",
+        [switch]$All,
+        [switch]$StopServiceFirst
     )
 
     $result = @{
         Success = $false
         Message = ""
         DeletedCount = 0
+        FailedFiles = @()
+        ServiceWasStopped = $false
     }
 
     try {
-        $profiles = @()
-
-        if ($All) {
-            $profiles = Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -notin @("Public","Default","Default User","All Users") }
-        } elseif ($UserProfile) {
-            $profiles = @(Get-Item $UserProfile -ErrorAction Stop)
-        } else {
-            throw "Spécifier un profil utilisateur ou utiliser -All"
-        }
-
-        foreach ($p in $profiles) {
-            $searchRoot = Join-Path $p.FullName "AppData\Roaming\Microsoft\Search\Data\Applications"
-            if (Test-Path $searchRoot) {
-                $edbs = Get-ChildItem $searchRoot -Recurse -Filter "*.edb" -ErrorAction SilentlyContinue
-
-                foreach ($edb in $edbs) {
-                    try {
-                        Remove-Item -Path $edb.FullName -Force -ErrorAction Stop
-                        $result.DeletedCount++
-                    } catch {
-                        # File might be in use
-                    }
-                }
-
-                # Also try to remove the folder structure
-                try {
-                    Remove-Item -Path $searchRoot -Recurse -Force -ErrorAction SilentlyContinue
-                } catch { }
+        # Stop WSearch service if requested (required for locked files)
+        if ($StopServiceFirst) {
+            $svc = Get-Service -Name "WSearch" -ErrorAction SilentlyContinue
+            if ($svc -and $svc.Status -eq "Running") {
+                Stop-Service -Name "WSearch" -Force -ErrorAction Stop
+                Start-Sleep -Seconds 2
+                $result.ServiceWasStopped = $true
             }
         }
 
+        # If specific file is provided, delete just that file
+        if ($SpecificFile -and (Test-Path $SpecificFile)) {
+            try {
+                Remove-Item -Path $SpecificFile -Force -ErrorAction Stop
+                $result.DeletedCount++
+            } catch {
+                $result.FailedFiles += $SpecificFile
+            }
+        } else {
+            # Delete from profiles
+            $profiles = @()
+
+            if ($All) {
+                $profiles = Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -notin @("Public","Default","Default User","All Users") }
+            } elseif ($UserProfile) {
+                $profiles = @(Get-Item $UserProfile -ErrorAction Stop)
+            } else {
+                throw "Spécifier un profil utilisateur ou utiliser -All"
+            }
+
+            foreach ($p in $profiles) {
+                $searchRoot = Join-Path $p.FullName "AppData\Roaming\Microsoft\Search\Data\Applications"
+                if (Test-Path $searchRoot) {
+                    $edbs = Get-ChildItem $searchRoot -Recurse -Filter "*.edb" -ErrorAction SilentlyContinue
+
+                    foreach ($edb in $edbs) {
+                        try {
+                            Remove-Item -Path $edb.FullName -Force -ErrorAction Stop
+                            $result.DeletedCount++
+                        } catch {
+                            $result.FailedFiles += $edb.FullName
+                        }
+                    }
+
+                    # Also try to remove the folder structure
+                    try {
+                        Remove-Item -Path $searchRoot -Recurse -Force -ErrorAction SilentlyContinue
+                    } catch { }
+                }
+            }
+        }
+
+        # Restart WSearch if we stopped it
+        if ($result.ServiceWasStopped) {
+            Start-Service -Name "WSearch" -ErrorAction SilentlyContinue
+        }
+
         $result.Success = $true
-        $result.Message = "$($result.DeletedCount) catalogue(s) per-user supprimé(s). Ils seront recréés à la prochaine connexion."
+        if ($result.FailedFiles.Count -gt 0) {
+            $result.Message = "$($result.DeletedCount) catalogue(s) supprimé(s). $($result.FailedFiles.Count) fichier(s) n'ont pas pu être supprimés (utilisateurs connectés?)."
+        } else {
+            $result.Message = "$($result.DeletedCount) catalogue(s) per-user supprimé(s). Ils seront recréés à la prochaine connexion."
+        }
 
     } catch {
         $result.Message = "Erreur: $($_.Exception.Message)"
+
+        # Restart service if we stopped it
+        if ($result.ServiceWasStopped) {
+            Start-Service -Name "WSearch" -ErrorAction SilentlyContinue
+        }
     }
 
     return $result
+}
+
+function Get-FSLogixProfileInfo {
+    <#
+    .SYNOPSIS
+    Récupère les informations sur les profils FSLogix montés
+    #>
+
+    $info = @{
+        IsInstalled = $false
+        ProfilesPath = ""
+        MountedProfiles = @()
+        OfflineVHDs = @()
+    }
+
+    # Check if FSLogix is installed
+    $info.IsInstalled = $script:hasFSLogix
+
+    if (-not $info.IsInstalled) {
+        return $info
+    }
+
+    # Get profiles path from registry
+    try {
+        $profilesKey = "HKLM:\SOFTWARE\FSLogix\Profiles"
+        if (Test-Path $profilesKey) {
+            $props = Get-ItemProperty $profilesKey -ErrorAction SilentlyContinue
+            if ($props.VHDLocations) {
+                $info.ProfilesPath = $props.VHDLocations
+            }
+        }
+
+        # Also check policies
+        $policiesKey = "HKLM:\SOFTWARE\Policies\FSLogix\ODFC"
+        if (Test-Path $policiesKey) {
+            $props = Get-ItemProperty $policiesKey -ErrorAction SilentlyContinue
+            if ($props.VHDLocations -and -not $info.ProfilesPath) {
+                $info.ProfilesPath = $props.VHDLocations
+            }
+        }
+    } catch { }
+
+    # Get currently mounted VHDs (frxcontext shows mounted profiles)
+    try {
+        $frxCmd = Get-Command "frx.exe" -ErrorAction SilentlyContinue
+        if ($frxCmd) {
+            $mounted = & frx.exe list 2>&1
+            # Parse output to get mounted profiles
+        }
+    } catch { }
+
+    # Alternative: Check for mounted VHDs via disk management
+    try {
+        $vhds = Get-Disk | Where-Object { $_.FriendlyName -like "*Virtual*" -or $_.Location -like "*.vhd*" }
+        foreach ($vhd in $vhds) {
+            $info.MountedProfiles += [pscustomobject]@{
+                DiskNumber = $vhd.Number
+                Location = $vhd.Location
+                Size = [math]::Round($vhd.Size / 1GB, 2)
+            }
+        }
+    } catch { }
+
+    return $info
+}
+
+function Get-ConnectedUsers {
+    <#
+    .SYNOPSIS
+    Liste les utilisateurs actuellement connectés
+    #>
+
+    $users = @()
+
+    try {
+        # Use query user command
+        $queryResult = & query.exe user 2>&1
+        if ($LASTEXITCODE -eq 0 -and $queryResult) {
+            $lines = $queryResult | Select-Object -Skip 1
+            foreach ($line in $lines) {
+                if ($line -match '^\s*(\S+)\s+(\S+)?\s+(\d+)\s+(\S+)\s+(.+)$') {
+                    $users += [pscustomobject]@{
+                        Username = $Matches[1]
+                        SessionName = $Matches[2]
+                        SessionId = $Matches[3]
+                        State = $Matches[4]
+                        IdleTime = $Matches[5].Trim()
+                    }
+                }
+            }
+        }
+    } catch { }
+
+    # Alternative: Get logged on users from Win32_ComputerSystem
+    if ($users.Count -eq 0) {
+        try {
+            $loggedOn = Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object -ExpandProperty UserName
+            if ($loggedOn) {
+                $users += [pscustomobject]@{
+                    Username = $loggedOn
+                    SessionName = "Console"
+                    SessionId = 1
+                    State = "Active"
+                    IdleTime = ""
+                }
+            }
+        } catch { }
+    }
+
+    return $users
 }
 
 function Reset-USNJournal {
@@ -1416,25 +1565,36 @@ function Repair-SearchService {
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="1.3*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Grid.Column="0" Margin="4">
                                 <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Index Global</TextBlock>
-                                <Button x:Name="BtnRebuildIndex" Content="Reconstruire l'index" Margin="0,2" Padding="8,6"/>
-                                <Button x:Name="BtnRepairService" Content="Réparer le service" Margin="0,2" Padding="8,6"/>
+                                <Button x:Name="BtnRebuildIndex" Content="Reconstruire l'index" Margin="0,2" Padding="8,6"
+                                        ToolTip="Supprime Windows.edb et force une reconstruction complète de l'index (peut prendre plusieurs heures)"/>
+                                <Button x:Name="BtnRepairService" Content="Réparer le service" Margin="0,2" Padding="8,6"
+                                        ToolTip="Réinitialise la configuration du service et ré-enregistre les composants"/>
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Margin="4">
                                 <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Catalogues Per-User</TextBlock>
-                                <Button x:Name="BtnDeleteAllPerUser" Content="Supprimer tous" Margin="0,2" Padding="8,6"/>
-                                <Button x:Name="BtnDeleteSelectedPerUser" Content="Supprimer sélectionné" Margin="0,2" Padding="8,6"/>
+                                <TextBlock FontSize="10" Opacity="0.7" Margin="0,0,0,4" TextWrapping="Wrap">FSLogix: déconnecter les utilisateurs ou cocher l'option ci-dessous</TextBlock>
+                                <CheckBox x:Name="ChkStopWSearchBeforeDelete" Content="Arrêter WSearch avant" Margin="0,2" IsChecked="True"
+                                          ToolTip="Arrête le service WSearch avant la suppression pour débloquer les fichiers verrouillés"/>
+                                <Button x:Name="BtnDeleteAllPerUser" Content="Supprimer tous" Margin="0,2" Padding="8,6"
+                                        ToolTip="Supprime tous les catalogues per-user. Le service WSearch sera arrêté si l'option est cochée."/>
+                                <Button x:Name="BtnDeleteSelectedPerUser" Content="Supprimer sélectionné" Margin="0,2" Padding="8,6"
+                                        ToolTip="Supprime le catalogue sélectionné dans le diagnostic (ligne PUC)"/>
+                                <Button x:Name="BtnShowConnectedUsers" Content="Utilisateurs connectés" Margin="0,2" Padding="8,6"
+                                        ToolTip="Affiche la liste des utilisateurs actuellement connectés"/>
                             </StackPanel>
 
                             <StackPanel Grid.Column="2" Margin="4">
-                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Journal USN</TextBlock>
-                                <Button x:Name="BtnResetUSN" Content="Réinitialiser USN (C:)" Margin="0,2" Padding="8,6"/>
+                                <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Journal USN (Update Sequence Number)</TextBlock>
+                                <TextBlock FontSize="10" Opacity="0.7" Margin="0,0,0,4" TextWrapping="Wrap">Journal NTFS qui enregistre les modifications de fichiers. Windows Search l'utilise pour détecter les fichiers modifiés. Erreur 3079 = quota insuffisant.</TextBlock>
+                                <Button x:Name="BtnResetUSN" Content="Réinitialiser USN (C:)" Margin="0,2" Padding="8,6"
+                                        ToolTip="Supprime et recrée le journal USN sur C:. Corrige l'erreur 3079. Redémarrer WSearch après."/>
                             </StackPanel>
 
                             <StackPanel Grid.Column="3" Margin="4">
@@ -1576,6 +1736,8 @@ $BtnResetUSN          = $window.FindName("BtnResetUSN")
 $BtnStopWSearchMaint  = $window.FindName("BtnStopWSearchMaint")
 $BtnStartWSearchMaint = $window.FindName("BtnStartWSearchMaint")
 $BtnRestartWSearchMaint = $window.FindName("BtnRestartWSearchMaint")
+$ChkStopWSearchBeforeDelete = $window.FindName("ChkStopWSearchBeforeDelete")
+$BtnShowConnectedUsers = $window.FindName("BtnShowConnectedUsers")
 
 function Set-Status([string]$msg) { $TxtStatus.Text = $msg }
 
@@ -2095,12 +2257,19 @@ $BtnRepairService.Add_Click({
 })
 
 $BtnDeleteAllPerUser.Add_Click({
+    $stopService = $ChkStopWSearchBeforeDelete.IsChecked
+
+    $serviceNote = if ($stopService) { "`n- Le service WSearch sera arrêté puis redémarré automatiquement" } else { "" }
+
     $warning = @"
 ATTENTION: Cette action va supprimer TOUS les catalogues Windows Search per-user.
 
 Conséquences:
 - Les index per-user seront recréés à la prochaine connexion de chaque utilisateur
-- Peut résoudre les erreurs de catalogue corrompu (EventID 7040, 3031)
+- Peut résoudre les erreurs de catalogue corrompu (EventID 7040, 3031)$serviceNote
+
+NOTE FSLogix: Si des utilisateurs sont connectés avec des profils FSLogix,
+leurs catalogues ne pourront être supprimés que si le service WSearch est arrêté.
 
 Voulez-vous continuer ?
 "@
@@ -2112,10 +2281,23 @@ Voulez-vous continuer ?
     $window.Cursor = [System.Windows.Input.Cursors]::Wait
 
     try {
-        $result = Remove-PerUserCatalogs -All
+        if ($stopService) {
+            $result = Remove-PerUserCatalogs -All -StopServiceFirst
+        } else {
+            $result = Remove-PerUserCatalogs -All
+        }
+
         if ($result.Success) {
+            $msg = $result.Message
+            if ($result.FailedFiles.Count -gt 0) {
+                $msg += "`n`nFichiers non supprimés (utilisateurs connectés?):`n"
+                $msg += ($result.FailedFiles | Select-Object -First 5) -join "`n"
+                if ($result.FailedFiles.Count -gt 5) {
+                    $msg += "`n... et $($result.FailedFiles.Count - 5) autre(s)"
+                }
+            }
             Set-Status $result.Message
-            [System.Windows.MessageBox]::Show($result.Message, "Succès", "OK", "Information") | Out-Null
+            [System.Windows.MessageBox]::Show($msg, "Résultat", "OK", "Information") | Out-Null
         } else {
             Set-Status "Erreur: $($result.Message)"
             [System.Windows.MessageBox]::Show($result.Message, "Erreur", "OK", "Error") | Out-Null
@@ -2143,13 +2325,58 @@ $BtnDeleteSelectedPerUser.Add_Click({
     # Extract path from solution field
     $path = $row.Solution -replace "Supprimer le catalogue per-user: ", ""
 
-    $res = [System.Windows.MessageBox]::Show("Supprimer le fichier:`n$path`n`nContinuer ?", "Confirmation", "YesNo", "Warning")
+    $stopService = $ChkStopWSearchBeforeDelete.IsChecked
+    $serviceNote = if ($stopService) { "`n`nLe service WSearch sera arrêté puis redémarré." } else { "" }
+
+    $res = [System.Windows.MessageBox]::Show("Supprimer le fichier:`n$path$serviceNote`n`nContinuer ?", "Confirmation", "YesNo", "Warning")
     if ($res -ne "Yes") { return }
 
+    Set-Status "Suppression du catalogue..."
+    $window.Cursor = [System.Windows.Input.Cursors]::Wait
+
     try {
-        Remove-Item -Path $path -Force -ErrorAction Stop
-        Set-Status "Catalogue supprimé: $path"
-        [System.Windows.MessageBox]::Show("Catalogue supprimé avec succès.", "Succès", "OK", "Information") | Out-Null
+        if ($stopService) {
+            $result = Remove-PerUserCatalogs -SpecificFile $path -StopServiceFirst
+        } else {
+            $result = Remove-PerUserCatalogs -SpecificFile $path
+        }
+
+        if ($result.Success -and $result.DeletedCount -gt 0) {
+            Set-Status "Catalogue supprimé: $path"
+            [System.Windows.MessageBox]::Show("Catalogue supprimé avec succès.", "Succès", "OK", "Information") | Out-Null
+        } elseif ($result.FailedFiles.Count -gt 0) {
+            Set-Status "Échec de la suppression"
+            [System.Windows.MessageBox]::Show("Impossible de supprimer le fichier. L'utilisateur est probablement connecté.`n`nEssayez de:`n1. Déconnecter l'utilisateur`n2. Ou arrêter manuellement le service WSearch", "Erreur", "OK", "Error") | Out-Null
+        } else {
+            Set-Status "Fichier non trouvé"
+            [System.Windows.MessageBox]::Show("Le fichier n'existe pas ou a déjà été supprimé.", "Information", "OK", "Information") | Out-Null
+        }
+    } catch {
+        Set-Status "Erreur: $($_.Exception.Message)"
+        [System.Windows.MessageBox]::Show($_.Exception.Message, "Erreur", "OK", "Error") | Out-Null
+    } finally {
+        $window.Cursor = $null
+    }
+})
+
+$BtnShowConnectedUsers.Add_Click({
+    try {
+        $users = Get-ConnectedUsers
+
+        if ($users.Count -eq 0) {
+            [System.Windows.MessageBox]::Show("Aucun utilisateur connecté détecté.", "Utilisateurs connectés", "OK", "Information") | Out-Null
+        } else {
+            $msg = "Utilisateurs actuellement connectés:`n`n"
+            foreach ($u in $users) {
+                $msg += "- $($u.Username) (Session: $($u.SessionName), État: $($u.State))`n"
+            }
+            $msg += "`nPour supprimer les catalogues per-user de ces utilisateurs:`n"
+            $msg += "1. Déconnectez les utilisateurs, OU`n"
+            $msg += "2. Cochez 'Arrêter WSearch avant' et utilisez 'Supprimer tous'"
+
+            [System.Windows.MessageBox]::Show($msg, "Utilisateurs connectés", "OK", "Information") | Out-Null
+        }
+        Set-Status "Utilisateurs connectés: $($users.Count)"
     } catch {
         Set-Status "Erreur: $($_.Exception.Message)"
         [System.Windows.MessageBox]::Show($_.Exception.Message, "Erreur", "OK", "Error") | Out-Null
