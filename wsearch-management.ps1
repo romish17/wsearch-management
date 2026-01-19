@@ -1,9 +1,10 @@
 #Requires -Version 5.1
 <#
-WindowsSearchTuner.ps1 - WPF GUI (Adaptive + DB Manager + Logs)
+WindowsSearchTuner.ps1 - WPF GUI (Adaptive + DB Manager + Logs + Index Status)
 - Tab 1: Tweaks Windows Search / FSLogix (si détecté)
 - Tab 2: Gestion des bases Windows Search (Global Windows.edb / Per-user *.edb)
 - Tab 3: Visualisation des logs Windows Search (Event Viewer)
+- Tab 4: Statut de l'indexation (éléments indexés, emplacements, taille)
 #>
 
 # -------------------------
@@ -456,13 +457,17 @@ function Get-WindowsSearchLogs {
             default { "Unknown" }
         }
 
+        $msgText = if ([string]::IsNullOrEmpty($e.Message)) { "(Aucun message)" } else { $e.Message }
+        $msgShort = ($msgText -replace "`r`n", " " -replace "`n", " ")
+        if ($msgShort.Length -gt 500) { $msgShort = $msgShort.Substring(0, 500) + "..." }
+
         $result.Add([pscustomobject]@{
             TimeCreated  = $e.TimeCreated
             Level        = $levelName
             EventId      = $e.Id
             Source       = $e.ProviderName
-            Message      = ($e.Message -replace "`r`n", " " -replace "`n", " ").Substring(0, [Math]::Min(500, $e.Message.Length))
-            FullMessage  = $e.Message
+            Message      = $msgShort
+            FullMessage  = $msgText
         })
     }
 
@@ -487,6 +492,226 @@ function Export-LogsToCsv {
 
     $Logs | Select-Object TimeCreated, Level, EventId, Source, FullMessage |
         Export-Csv -Path $FilePath -NoTypeInformation -Encoding UTF8
+}
+
+# -------------------------
+# Windows Search Index Status
+# -------------------------
+function Get-SearchIndexStatus {
+    $status = [pscustomobject]@{
+        ServiceStatus       = "Inconnu"
+        ServiceStartType    = "Inconnu"
+        IndexingStatus      = "Inconnu"
+        ItemsIndexed        = 0
+        ItemsToIndex        = 0
+        ItemsTotal          = 0
+        IndexSizeMB         = 0
+        LastIndexTime       = $null
+        CatalogStatus       = "Inconnu"
+    }
+
+    # Service status
+    try {
+        $svc = Get-Service -Name "WSearch" -ErrorAction SilentlyContinue
+        if ($svc) {
+            $status.ServiceStatus = $svc.Status.ToString()
+            $svcConfig = Get-CimInstance Win32_Service -Filter "Name='WSearch'" -ErrorAction SilentlyContinue
+            if ($svcConfig) {
+                $status.ServiceStartType = $svcConfig.StartMode
+            }
+        }
+    } catch { }
+
+    # Try to get indexing status via SearchManager COM object
+    try {
+        $searchManager = New-Object -ComObject Microsoft.Search.Interop.CSearchManager
+        $catalog = $searchManager.GetCatalog("SystemIndex")
+
+        $catalogStatus = $catalog.GetCatalogStatus([ref]$null, [ref]$null)
+        $status.CatalogStatus = switch ($catalogStatus) {
+            0 { "Idle (Prêt)" }
+            1 { "Paused (En pause)" }
+            2 { "Recovering (Récupération)" }
+            3 { "Full crawl (Indexation complète)" }
+            4 { "Incremental crawl (Indexation incrémentale)" }
+            5 { "Processing notifications" }
+            6 { "Shutting down" }
+            default { "Inconnu ($catalogStatus)" }
+        }
+
+        # Get item counts
+        $status.ItemsIndexed = $catalog.NumberOfItems()
+
+        # Release COM object
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($catalog) | Out-Null
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($searchManager) | Out-Null
+    } catch {
+        $status.CatalogStatus = "Erreur COM: $($_.Exception.Message)"
+    }
+
+    # Alternative: Get status from registry/performance counters
+    try {
+        $perfCounter = Get-Counter "\Search Indexer(*)\*" -ErrorAction SilentlyContinue
+        if ($perfCounter) {
+            foreach ($sample in $perfCounter.CounterSamples) {
+                if ($sample.Path -like "*documents indexed*") {
+                    $status.ItemsIndexed = [int]$sample.CookedValue
+                }
+                if ($sample.Path -like "*documents filtered*") {
+                    $status.ItemsToIndex = [int]$sample.CookedValue
+                }
+            }
+        }
+    } catch { }
+
+    # Index size from DB file
+    try {
+        $globalDb = "C:\ProgramData\Microsoft\Search\Data\Applications\Windows\Windows.edb"
+        if (Test-Path $globalDb) {
+            $fi = Get-Item $globalDb -ErrorAction SilentlyContinue
+            $status.IndexSizeMB = [math]::Round($fi.Length / 1MB, 2)
+            $status.LastIndexTime = $fi.LastWriteTime
+        }
+    } catch { }
+
+    return $status
+}
+
+function Get-IndexedLocations {
+    $locations = New-Object System.Collections.ObjectModel.ObservableCollection[Object]
+
+    try {
+        $searchManager = New-Object -ComObject Microsoft.Search.Interop.CSearchManager
+        $catalog = $searchManager.GetCatalog("SystemIndex")
+        $crawlScopeManager = $catalog.GetCrawlScopeManager()
+
+        # Get roots
+        $rootsEnum = $crawlScopeManager.EnumerateRoots()
+        while ($true) {
+            try {
+                $root = $rootsEnum.Next(1, [ref]$null, [ref]$null)
+                if (-not $root) { break }
+
+                $url = $rootsEnum.URL
+                $isIncluded = $crawlScopeManager.IncludedInCrawlScope($url)
+
+                $locations.Add([pscustomobject]@{
+                    Type     = "Root"
+                    Path     = $url
+                    Included = if ($isIncluded) { "Oui" } else { "Non" }
+                    Status   = "Actif"
+                })
+            } catch { break }
+        }
+
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($crawlScopeManager) | Out-Null
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($catalog) | Out-Null
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($searchManager) | Out-Null
+    } catch {
+        # Fallback: read from registry
+    }
+
+    # Fallback/additional: Read indexed locations from registry
+    try {
+        $scopeKey = "HKLM:\SOFTWARE\Microsoft\Windows Search\CrawlScopeManager\Windows\SystemIndex\DefaultRules"
+        if (Test-Path $scopeKey) {
+            $rules = Get-ChildItem $scopeKey -ErrorAction SilentlyContinue
+            foreach ($rule in $rules) {
+                $props = Get-ItemProperty $rule.PSPath -ErrorAction SilentlyContinue
+                if ($props.URL) {
+                    $existing = $locations | Where-Object { $_.Path -eq $props.URL }
+                    if (-not $existing) {
+                        $locations.Add([pscustomobject]@{
+                            Type     = "Rule"
+                            Path     = $props.URL
+                            Included = if ($props.Include -eq 1) { "Oui" } else { "Non" }
+                            Status   = "Registry"
+                        })
+                    }
+                }
+            }
+        }
+
+        # Also check user-defined rules
+        $userScopeKey = "HKLM:\SOFTWARE\Microsoft\Windows Search\CrawlScopeManager\Windows\SystemIndex\WorkingSetRules"
+        if (Test-Path $userScopeKey) {
+            $rules = Get-ChildItem $userScopeKey -ErrorAction SilentlyContinue
+            foreach ($rule in $rules) {
+                $props = Get-ItemProperty $rule.PSPath -ErrorAction SilentlyContinue
+                if ($props.URL) {
+                    $existing = $locations | Where-Object { $_.Path -eq $props.URL }
+                    if (-not $existing) {
+                        $locations.Add([pscustomobject]@{
+                            Type     = "WorkingSet"
+                            Path     = $props.URL
+                            Included = if ($props.Include -eq 1) { "Oui" } else { "Non" }
+                            Status   = "Registry"
+                        })
+                    }
+                }
+            }
+        }
+    } catch { }
+
+    # Common indexed locations (hardcoded fallback)
+    $commonPaths = @(
+        "file:///C:\Users\",
+        "file:///C:\ProgramData\Microsoft\Windows\Start Menu\",
+        "iehistory://{user}",
+        "mapi://{user}/"
+    )
+
+    foreach ($cp in $commonPaths) {
+        $existing = $locations | Where-Object { $_.Path -like "*$($cp.Replace('file:///', '').Replace('/', '\'))*" }
+        if (-not $existing -and $locations.Count -eq 0) {
+            $locations.Add([pscustomobject]@{
+                Type     = "Default"
+                Path     = $cp
+                Included = "Probable"
+                Status   = "Standard"
+            })
+        }
+    }
+
+    return $locations
+}
+
+function Get-IndexedFileTypes {
+    $fileTypes = New-Object System.Collections.ObjectModel.ObservableCollection[Object]
+
+    try {
+        # Read from registry - Persistent handlers
+        $handlersKey = "HKLM:\SOFTWARE\Microsoft\Windows Search\Gathering Manager\Applications\Windows\GatheringSet\FileSystemIndex\Extensions"
+        if (Test-Path $handlersKey) {
+            $extensions = Get-ChildItem $handlersKey -ErrorAction SilentlyContinue
+            foreach ($ext in $extensions) {
+                $extName = $ext.PSChildName
+                $props = Get-ItemProperty $ext.PSPath -ErrorAction SilentlyContinue
+
+                $fileTypes.Add([pscustomobject]@{
+                    Extension   = $extName
+                    Handler     = if ($props.PSObject.Properties.Name -contains "ContentFilter") { $props.ContentFilter } else { "(Default)" }
+                    IndexContent = if ($props.PSObject.Properties.Name -contains "IndexContent") { $props.IndexContent } else { "N/A" }
+                })
+            }
+        }
+
+        # Alternative: PropertyHandlers registry
+        $propHandlersKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PropertySystem\PropertyHandlers"
+        if ((Test-Path $propHandlersKey) -and $fileTypes.Count -eq 0) {
+            $extensions = Get-ChildItem $propHandlersKey -ErrorAction SilentlyContinue | Select-Object -First 50
+            foreach ($ext in $extensions) {
+                $extName = $ext.PSChildName
+                $fileTypes.Add([pscustomobject]@{
+                    Extension    = $extName
+                    Handler      = "(PropertyHandler)"
+                    IndexContent = "Oui"
+                })
+            }
+        }
+    } catch { }
+
+    return $fileTypes
 }
 
 # -------------------------
@@ -746,6 +971,102 @@ function Export-LogsToCsv {
                     </Border>
                 </Grid>
             </TabItem>
+
+            <TabItem Header="Index Status">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="12" Grid.Row="0" Margin="0,0,0,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Orientation="Vertical">
+                                <TextBlock FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8">Statut de l'indexation Windows Search</TextBlock>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="200"/>
+                                        <ColumnDefinition Width="200"/>
+                                        <ColumnDefinition Width="200"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,2">Service WSearch:</TextBlock>
+                                    <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtIdxServiceStatus" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="2" Margin="0,2">Type démarrage:</TextBlock>
+                                    <TextBlock Grid.Row="0" Grid.Column="3" x:Name="TxtIdxStartType" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2">Statut catalogue:</TextBlock>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtIdxCatalogStatus" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,2">Éléments indexés:</TextBlock>
+                                    <TextBlock Grid.Row="1" Grid.Column="3" x:Name="TxtIdxItemsCount" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,2">Taille index (MB):</TextBlock>
+                                    <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TxtIdxSizeMB" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="2" Margin="0,2">Dernière MAJ:</TextBlock>
+                                    <TextBlock Grid.Row="2" Grid.Column="3" x:Name="TxtIdxLastUpdate" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Top">
+                                <Button x:Name="BtnRefreshIndexStatus" Content="Rafraîchir statut" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnOpenIndexOptions" Content="Options d'indexation" Margin="4" Padding="12,6"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="8" Grid.Row="1" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,20,0">Emplacements indexés:</TextBlock>
+                            <Button x:Name="BtnRefreshLocations" Content="Charger emplacements" Margin="4" Padding="12,6"/>
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid x:Name="GridIndexLocations" Grid.Row="2"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              IsReadOnly="True"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow"
+                              GridLinesVisibility="Horizontal"
+                              HeadersVisibility="Column"
+                              RowHeight="28">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="100"/>
+                            <DataGridTextColumn Header="Chemin / URL" Binding="{Binding Path}" Width="*"/>
+                            <DataGridTextColumn Header="Inclus" Binding="{Binding Included}" Width="80">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <Trigger Property="Text" Value="Oui">
+                                                <Setter Property="Foreground" Value="#44FF44"/>
+                                            </Trigger>
+                                            <Trigger Property="Text" Value="Non">
+                                                <Setter Property="Foreground" Value="#FF4444"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Header="Source" Binding="{Binding Status}" Width="100"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
         </TabControl>
 
         <Border Grid.Row="2" BorderBrush="#444" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,10,0,0">
@@ -806,6 +1127,18 @@ $BtnClearLogFilter    = $window.FindName("BtnClearLogFilter")
 $BtnExportLogs        = $window.FindName("BtnExportLogs")
 $BtnOpenEventViewer   = $window.FindName("BtnOpenEventViewer")
 
+# Index Status tab controls
+$TxtIdxServiceStatus  = $window.FindName("TxtIdxServiceStatus")
+$TxtIdxStartType      = $window.FindName("TxtIdxStartType")
+$TxtIdxCatalogStatus  = $window.FindName("TxtIdxCatalogStatus")
+$TxtIdxItemsCount     = $window.FindName("TxtIdxItemsCount")
+$TxtIdxSizeMB         = $window.FindName("TxtIdxSizeMB")
+$TxtIdxLastUpdate     = $window.FindName("TxtIdxLastUpdate")
+$GridIndexLocations   = $window.FindName("GridIndexLocations")
+$BtnRefreshIndexStatus = $window.FindName("BtnRefreshIndexStatus")
+$BtnOpenIndexOptions  = $window.FindName("BtnOpenIndexOptions")
+$BtnRefreshLocations  = $window.FindName("BtnRefreshLocations")
+
 function Set-Status([string]$msg) { $TxtStatus.Text = $msg }
 
 function Build-SystemInfoText {
@@ -828,6 +1161,10 @@ $GridDb.ItemsSource = $DbRows
 # Logs datasource
 $LogRows = New-Object System.Collections.ObjectModel.ObservableCollection[Object]
 $GridLogs.ItemsSource = $LogRows
+
+# Index locations datasource
+$IndexLocationRows = New-Object System.Collections.ObjectModel.ObservableCollection[Object]
+$GridIndexLocations.ItemsSource = $IndexLocationRows
 
 function Refresh-Tweaks {
     $global:UiRows = Build-UiRows
@@ -1146,6 +1483,91 @@ $GridLogs.Add_SelectionChanged({
         $TxtLogDetail.Text = $row.FullMessage
     } else {
         $TxtLogDetail.Text = ""
+    }
+})
+
+# -------------------------
+# Events - Index Status tab
+# -------------------------
+function Refresh-IndexStatusUI {
+    Set-Status "Chargement du statut d'indexation..."
+    $window.Cursor = [System.Windows.Input.Cursors]::Wait
+
+    try {
+        $status = Get-SearchIndexStatus
+
+        $TxtIdxServiceStatus.Text = $status.ServiceStatus
+        $TxtIdxStartType.Text = $status.ServiceStartType
+        $TxtIdxCatalogStatus.Text = $status.CatalogStatus
+        $TxtIdxItemsCount.Text = "{0:N0}" -f $status.ItemsIndexed
+        $TxtIdxSizeMB.Text = "{0:N2} MB" -f $status.IndexSizeMB
+
+        if ($status.LastIndexTime) {
+            $TxtIdxLastUpdate.Text = $status.LastIndexTime.ToString("yyyy-MM-dd HH:mm:ss")
+        } else {
+            $TxtIdxLastUpdate.Text = "-"
+        }
+
+        # Color code service status
+        if ($status.ServiceStatus -eq "Running") {
+            $TxtIdxServiceStatus.Foreground = [System.Windows.Media.Brushes]::LightGreen
+        } elseif ($status.ServiceStatus -eq "Stopped") {
+            $TxtIdxServiceStatus.Foreground = [System.Windows.Media.Brushes]::OrangeRed
+        } else {
+            $TxtIdxServiceStatus.Foreground = [System.Windows.Media.Brushes]::White
+        }
+
+        Set-Status "Statut d'indexation chargé."
+    } catch {
+        Set-Status "Erreur: $($_.Exception.Message)"
+    } finally {
+        $window.Cursor = $null
+    }
+}
+
+function Refresh-IndexLocationsUI {
+    Set-Status "Chargement des emplacements indexés..."
+    $window.Cursor = [System.Windows.Input.Cursors]::Wait
+
+    try {
+        $locations = Get-IndexedLocations
+        $IndexLocationRows.Clear()
+        foreach ($loc in $locations) { $IndexLocationRows.Add($loc) }
+        Set-Status "Emplacements chargés: $($locations.Count) entrée(s)."
+    } catch {
+        Set-Status "Erreur: $($_.Exception.Message)"
+    } finally {
+        $window.Cursor = $null
+    }
+}
+
+$BtnRefreshIndexStatus.Add_Click({
+    try { Refresh-IndexStatusUI } catch {
+        Set-Status "Erreur: $($_.Exception.Message)"
+        [System.Windows.MessageBox]::Show($_.Exception.Message, "Erreur", "OK", "Error") | Out-Null
+    }
+})
+
+$BtnRefreshLocations.Add_Click({
+    try { Refresh-IndexLocationsUI } catch {
+        Set-Status "Erreur: $($_.Exception.Message)"
+        [System.Windows.MessageBox]::Show($_.Exception.Message, "Erreur", "OK", "Error") | Out-Null
+    }
+})
+
+$BtnOpenIndexOptions.Add_Click({
+    try {
+        # Open Windows Indexing Options control panel
+        Start-Process "control.exe" -ArgumentList "/name Microsoft.IndexingOptions" -ErrorAction SilentlyContinue
+        Set-Status "Options d'indexation ouvertes."
+    } catch {
+        # Fallback
+        try {
+            Start-Process "rundll32.exe" -ArgumentList "shell32.dll,Control_RunDLL srchadmin.dll" -ErrorAction SilentlyContinue
+            Set-Status "Options d'indexation ouvertes."
+        } catch {
+            Set-Status "Erreur: $($_.Exception.Message)"
+        }
     }
 })
 
