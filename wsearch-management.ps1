@@ -527,7 +527,11 @@ function Get-SearchIndexStatus {
         $searchManager = New-Object -ComObject Microsoft.Search.Interop.CSearchManager
         $catalog = $searchManager.GetCatalog("SystemIndex")
 
-        $catalogStatus = $catalog.GetCatalogStatus([ref]$null, [ref]$null)
+        # GetCatalogStatus returns the status directly
+        $pauseReason = 0
+        $additionalInfo = 0
+        $catalogStatus = $catalog.GetCatalogStatus([ref]$pauseReason, [ref]$additionalInfo)
+
         $status.CatalogStatus = switch ($catalogStatus) {
             0 { "Idle (Prêt)" }
             1 { "Paused (En pause)" }
@@ -546,7 +550,17 @@ function Get-SearchIndexStatus {
         [System.Runtime.Interopservices.Marshal]::ReleaseComObject($catalog) | Out-Null
         [System.Runtime.Interopservices.Marshal]::ReleaseComObject($searchManager) | Out-Null
     } catch {
-        $status.CatalogStatus = "Erreur COM: $($_.Exception.Message)"
+        # Fallback: try to get status from registry
+        try {
+            $statusKey = "HKLM:\SOFTWARE\Microsoft\Windows Search\CatalogNames\SystemIndex"
+            if (Test-Path $statusKey) {
+                $status.CatalogStatus = "Disponible (via Registry)"
+            } else {
+                $status.CatalogStatus = "Non disponible"
+            }
+        } catch {
+            $status.CatalogStatus = "Erreur: $($_.Exception.Message)"
+        }
     }
 
     # Alternative: Get status from registry/performance counters
@@ -925,8 +939,25 @@ function Get-IndexedFileTypes {
                               GridLinesVisibility="Horizontal"
                               HeadersVisibility="Column"
                               RowHeight="28">
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Level}" Value="Error">
+                                        <Setter Property="Background" Value="#4CFF4444"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Level}" Value="Critical">
+                                        <Setter Property="Background" Value="#66FF0000"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Level}" Value="Warning">
+                                        <Setter Property="Background" Value="#4CFFA500"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Date/Heure" Binding="{Binding TimeCreated, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" Width="150"/>
+                            <DataGridTextColumn Header="Date/Heure" Binding="{Binding TimeCreated, StringFormat='{}{0:dd/MM/yyyy HH:mm:ss}'}" Width="150"/>
                             <DataGridTextColumn Header="Niveau" Binding="{Binding Level}" Width="90">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
@@ -963,7 +994,7 @@ function Get-IndexedFileTypes {
                                      IsReadOnly="True"
                                      TextWrapping="Wrap"
                                      VerticalScrollBarVisibility="Auto"
-                                     Height="100"
+                                     Height="180"
                                      Background="#1E1E1E"
                                      Foreground="#CCCCCC"
                                      Padding="8"/>
@@ -1503,7 +1534,7 @@ function Refresh-IndexStatusUI {
         $TxtIdxSizeMB.Text = "{0:N2} MB" -f $status.IndexSizeMB
 
         if ($status.LastIndexTime) {
-            $TxtIdxLastUpdate.Text = $status.LastIndexTime.ToString("yyyy-MM-dd HH:mm:ss")
+            $TxtIdxLastUpdate.Text = $status.LastIndexTime.ToString("dd/MM/yyyy HH:mm:ss")
         } else {
             $TxtIdxLastUpdate.Text = "-"
         }
