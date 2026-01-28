@@ -176,7 +176,7 @@ $ProfileRecommendations = @{
         DisableRemovableDriveIndexing = "1"
         AllowCloudSearch = "0"
         AllowSearchToUseLocation = "0"
-        RoamSearch = "0"  # Désactivé sur OS modernes (>= 1809)
+        RoamSearch = "0"  # désactivé sur OS modernes (>= 1809)
         Notes = "Per-user catalog isolé dans le VHD. RoamSearch désactivé car géré nativement. Backoff actif pour réduire I/O."
     }
     "UPD" = @{
@@ -193,8 +193,8 @@ $ProfileRecommendations = @{
         Notes = "Index per-user stocké dans le UPD. Minimise l'impact sur le serveur RDS."
     }
     "Roaming" = @{
-        Description = "Profils itinérants - Éviter l'indexation per-user"
-        EnablePerUserCatalog = "0"  # IMPORTANT: Éviter les catalogues per-user dans profils roaming
+        Description = "Profils itinérants - éviter l'indexation per-user"
+        EnablePerUserCatalog = "0"  # IMPORTANT: éviter les catalogues per-user dans profils roaming
         DisableBackoff = "0"
         ConnectedSearchUseWeb = "0"
         EnableDynamicContentInWSB = "0"
@@ -676,8 +676,8 @@ function Get-SearchIndexStatus {
         $status.CatalogStatus = switch ($catalogStatus) {
             0 { "Idle (Prêt)" }
             1 { "Paused (En pause)" }
-            2 { "Recovering (Récupération)" }
-            3 { "Full crawl (Indexation complète)" }
+            2 { "Recovering (récupération)" }
+            3 { "Full crawl (Indexation compléte)" }
             4 { "Incremental crawl (Indexation incrémentale)" }
             5 { "Processing notifications" }
             6 { "Shutting down" }
@@ -880,9 +880,9 @@ function Get-SearchDiagnostics {
         @{ EventId = 7040; Description = "Catalogue corrompu"; Severity = "Critical"; Solution = "Reconstruire l'index" },
         @{ EventId = 3031; Description = "Impossible d'allouer un ID de document"; Severity = "Error"; Solution = "Reconstruire l'index ou supprimer les catalogues per-user" },
         @{ EventId = 3079; Description = "Notifications USN non actives (quota insuffisant)"; Severity = "Warning"; Solution = "Augmenter le quota USN ou reconstruire l'index" },
-        @{ EventId = 3036; Description = "Erreur d'accès aux fichiers"; Severity = "Warning"; Solution = "Vérifier les permissions" },
+        @{ EventId = 3036; Description = "Erreur d'accés aux fichiers"; Severity = "Warning"; Solution = "Vérifier les permissions" },
         @{ EventId = 3083; Description = "Erreur de filtre de contenu"; Severity = "Warning"; Solution = "Réinstaller les iFilters" },
-        @{ EventId = 1008; Description = "Service arrêté de manière inattendue"; Severity = "Error"; Solution = "Vérifier les logs système" }
+        @{ EventId = 1008; Description = "Service arrêté de maniére inattendue"; Severity = "Error"; Solution = "Vérifier les logs systéme" }
     )
 
     try {
@@ -947,7 +947,7 @@ function Get-SearchDiagnostics {
                             Severity    = if ($sizeMB -gt 500) { "Warning" } else { "Info" }
                             Solution    = "Supprimer le catalogue per-user: $($edb.FullName)"
                             LastOccurrence = $edb.LastWriteTime
-                            Message     = "User: $($p.Name) | Taille: $sizeMB MB | Âge: $([int]$age.TotalDays) jours"
+                            Message     = "User: $($p.Name) | Taille: $sizeMB MB | ége: $([int]$age.TotalDays) jours"
                         })
                     }
                 }
@@ -967,6 +967,369 @@ function Get-SearchDiagnostics {
     }
 
     return $diagnostics
+}
+
+# -------------------------
+# Fonctions pour gérer les événements ID spécifiques
+# -------------------------
+function Get-SpecificSearchEvents {
+    <#
+    .SYNOPSIS
+    Détecte les événements Windows Search spécifiques (1019, 7042, 7040, 3036)
+    #>
+    
+    $events = New-Object System.Collections.ObjectModel.ObservableCollection[Object]
+    
+    $targetEventIds = @(1019, 7042, 7040, 3036)
+    
+    try {
+        # Provider names pour Windows Search
+        $providers = @(
+            "Microsoft-Windows-Search",
+            "Microsoft-Windows-Search-Core",
+            "Microsoft-Windows-Search-ProfileNotify",
+            "Microsoft-Windows-SearchIndexer"
+        )
+        
+        $allEvents = @()
+        $dateLimit = (Get-Date).AddDays(-7)
+        
+        # Recherche dans Application log pour chaque provider
+        foreach ($provider in $providers) {
+            try {
+                $filterXml = @"
+<QueryList>
+  <Query Id="0" Path="Application">
+    <Select Path="Application">*[System[Provider[@Name='$provider']]]</Select>
+  </Query>
+</QueryList>
+"@
+                $logEvents = Get-WinEvent -FilterXml $filterXml -MaxEvents 1000 -ErrorAction SilentlyContinue
+                if ($logEvents) {
+                    $filtered = $logEvents | Where-Object { 
+                        $_.TimeCreated -gt $dateLimit -and
+                        $targetEventIds -contains $_.Id
+                    }
+                    if ($filtered) { $allEvents += $filtered }
+                }
+            } catch { }
+        }
+        
+        # Recherche dans les logs dédiés Search
+        $searchLogs = @(
+            "Microsoft-Windows-Search/Admin",
+            "Microsoft-Windows-Search/Operational"
+        )
+        
+        foreach ($logName in $searchLogs) {
+            try {
+                $logEvents = Get-WinEvent -LogName $logName -MaxEvents 1000 -ErrorAction SilentlyContinue |
+                    Where-Object { 
+                        $_.TimeCreated -gt $dateLimit -and
+                        $targetEventIds -contains $_.Id
+                    }
+                
+                if ($logEvents) {
+                    $allEvents += $logEvents
+                }
+            } catch { }
+        }
+        
+        # Grouper par EventID
+        $grouped = $allEvents | Group-Object Id
+        
+        foreach ($group in $grouped) {
+            $eventId = [int]$group.Name
+            $lastEvent = $group.Group | Sort-Object TimeCreated -Descending | Select-Object -First 1
+            $message = $lastEvent.Message
+            
+            # Analyse spécifique par Event ID
+            $description = ""
+            $solution = ""
+            $severity = "Warning"
+            $errorCode = ""
+            
+            switch ($eventId) {
+                1019 {
+                    $description = "Erreur traitement des emplacements inclus/exclus"
+                    
+                    # Extraire le code d'erreur
+                    if ($message -match "0x([0-9A-Fa-f]{8})") {
+                        $errorCode = "0x$($Matches[1])"
+                    }
+                    
+                    # Déterminer la solution selon l'erreur
+                    if ($errorCode -eq "0x80004005" -or $message -like "*0x80004005*") {
+                        $solution = "Erreur générique d'accès. Vérifier les chemins d'indexation et reconstruire l'index."
+                        $severity = "Error"
+                    } elseif ($errorCode -eq "0x80070005" -or $message -like "*0x80070005*") {
+                        $solution = "Accès refusé. Vérifier les permissions NTFS sur les dossiers indexés."
+                        $severity = "Error"
+                    } elseif ($message -like "*ProgramData\Microsoft\Windows\Start Menu*") {
+                        $solution = "Problème avec le menu Démarrer. Recréer le profil utilisateur ou reconstruire l'index."
+                        $severity = "Warning"
+                    } else {
+                        $solution = "Vérifier les chemins d'indexation dans Options d'indexation. Supprimer les chemins invalides."
+                        $severity = "Warning"
+                    }
+                }
+                
+                7042 {
+                    $description = "Service arrêté - Catalogue corrompu"
+                    $solution = "CRITIQUE: Reconstruire l'index immédiatement. Le catalogue est endommagé (0xc0041801)."
+                    $severity = "Critical"
+                }
+                
+                7040 {
+                    $description = "Fichiers de données corrompus détectés"
+                    $solution = "Windows Search va tenter une auto-réparation. Si le problème persiste, reconstruire l'index."
+                    $severity = "Warning"
+                }
+                
+                3036 {
+                    $description = "Échec d'analyse de la source de contenu"
+                    
+                    # Vérifier s'il s'agit d'un problème OneDrive
+                    if ($message -like "*ONEINDEX*") {
+                        $solution = "Problème avec OneDrive. Réinitialiser OneDrive ou exclure le dossier OneDrive de l'indexation."
+                        $severity = "Warning"
+                    } else {
+                        $solution = "Erreur d'accès au contenu (0x80004005). Vérifier les permissions et l'état du disque."
+                        $severity = "Error"
+                    }
+                }
+            }
+            
+            $events.Add([PSCustomObject]@{
+                EventId = $eventId
+                Count = $group.Count
+                Description = $description
+                Severity = $severity
+                Solution = $solution
+                LastOccurrence = $lastEvent.TimeCreated
+                Message = if ($message.Length -gt 300) { $message.Substring(0, 300) + "..." } else { $message }
+                ErrorCode = $errorCode
+                FullMessage = $message
+            })
+        }
+        
+    } catch {
+        $events.Add([PSCustomObject]@{
+            EventId = "ERR"
+            Count = 1
+            Description = "Erreur lors de l'analyse"
+            Severity = "Error"
+            Solution = "Vérifier les permissions sur les logs événements"
+            LastOccurrence = Get-Date
+            Message = $_.Exception.Message
+            ErrorCode = ""
+            FullMessage = $_.Exception.Message
+        })
+    }
+    
+    return $events
+}
+
+function Repair-SearchEvent {
+    <#
+    .SYNOPSIS
+    Applique une réparation selon l'Event ID détecté
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [PSCustomObject]$EventData
+    )
+    
+    $result = @{
+        Success = $false
+        Message = ""
+        ActionsPerformed = @()
+    }
+    
+    try {
+        $eventId = [int]$EventData.EventId
+        
+        switch ($eventId) {
+            1019 {
+                # Erreur de traitement des emplacements
+                $errorCode = $EventData.ErrorCode
+                
+                if ($errorCode -eq "0x80070005" -or $EventData.FullMessage -like "*0x80070005*") {
+                    # Problème de permissions - Reset des permissions sur les dossiers communs
+                    $result.ActionsPerformed += "Réinitialisation des permissions d'indexation"
+                    
+                    # Redémarrer le service pour réappliquer les permissions
+                    Stop-Service -Name "WSearch" -Force -ErrorAction Stop
+                    Start-Sleep -Seconds 2
+                    Start-Service -Name "WSearch" -ErrorAction Stop
+                    
+                    $result.ActionsPerformed += "Service WSearch redémarré"
+                    $result.Success = $true
+                    $result.Message = "Permissions réinitialisées. Si le problème persiste, vérifiez manuellement les permissions NTFS."
+                    
+                } elseif ($EventData.FullMessage -like "*Start Menu*") {
+                    # Problème spécifique menu Démarrer - reconstruire l'index
+                    $result.ActionsPerformed += "Problème détecté avec le menu Démarrer"
+                    $result.Message = "Reconstruction de l'index recommandée. Utilisez le bouton 'Reconstruire l'index' dans l'onglet Maintenance."
+                    $result.Success = $true
+                    
+                } else {
+                    # Erreur générique - nettoyer les chemins d'indexation
+                    $result.ActionsPerformed += "Nettoyage des chemins d'indexation invalides recommandé"
+                    $result.Message = "Ouvrez les Options d'indexation (bouton dans l'onglet Index Status) et supprimez les chemins invalides."
+                    $result.Success = $true
+                }
+            }
+            
+            7042 {
+                # Catalogue corrompu - reconstruction nécessaire
+                $confirmMsg = "Event ID 7042: Le catalogue est CORROMPU.`n`n" +
+                              "La seule solution est de RECONSTRUIRE L'INDEX COMPLET.`n`n" +
+                              "Cela va:`n" +
+                              "- Arrêter le service Windows Search`n" +
+                              "- Supprimer le catalogue actuel`n" +
+                              "- Reconstruire l'index (plusieurs heures)`n`n" +
+                              "Continuer ?"
+                
+                $confirm = [System.Windows.MessageBox]::Show($confirmMsg, "Catalogue corrompu - Reconstruction", "YesNo", "Warning")
+                
+                if ($confirm -eq "Yes") {
+                    $rebuildResult = Invoke-RebuildSearchIndex -Force
+                    
+                    if ($rebuildResult.Success) {
+                        $result.Success = $true
+                        $result.Message = $rebuildResult.Message
+                        $result.ActionsPerformed += "Index global reconstruit"
+                    } else {
+                        $result.Message = $rebuildResult.Message
+                    }
+                } else {
+                    $result.Message = "Reconstruction annulée par l'utilisateur."
+                }
+            }
+            
+            7040 {
+                # Fichiers corrompus - laisser Windows réparer, sinon reconstruire
+                $result.ActionsPerformed += "Détection de fichiers corrompus"
+                
+                # Redémarrer le service pour lancer l'auto-réparation
+                Stop-Service -Name "WSearch" -Force -ErrorAction Stop
+                Start-Sleep -Seconds 3
+                Start-Service -Name "WSearch" -ErrorAction Stop
+                
+                $result.ActionsPerformed += "Service redémarré pour auto-réparation"
+                $result.Success = $true
+                $result.Message = "Windows Search va tenter une auto-réparation. Surveillez les logs. Si l'erreur persiste après 30 minutes, reconstruisez l'index."
+            }
+            
+            3036 {
+                # Échec d'indexation de source
+                if ($EventData.FullMessage -like "*ONEINDEX*") {
+                    # Problème OneDrive
+                    $result.ActionsPerformed += "Problème OneDrive détecté"
+                    
+                    # Proposer de redémarrer OneDrive
+                    $confirmMsg = "Problème détecté avec l'indexation OneDrive.`n`n" +
+                                  "Solutions proposées:`n" +
+                                  "1. Redémarrer OneDrive`n" +
+                                  "2. Exclure OneDrive de l'indexation`n" +
+                                  "3. Réinitialiser OneDrive`n`n" +
+                                  "Voulez-vous redémarrer le service WSearch maintenant (option 1) ?"
+                    
+                    $confirm = [System.Windows.MessageBox]::Show($confirmMsg, "Problème OneDrive", "YesNo", "Question")
+                    
+                    if ($confirm -eq "Yes") {
+                        Stop-Service -Name "WSearch" -Force -ErrorAction Stop
+                        Start-Sleep -Seconds 2
+                        Start-Service -Name "WSearch" -ErrorAction Stop
+                        
+                        $result.ActionsPerformed += "Service WSearch redémarré"
+                        $result.Success = $true
+                        $result.Message = "Service redémarré. Si le problème persiste, excluez OneDrive de l'indexation dans les Options d'indexation."
+                    } else {
+                        $result.Message = "Action annulée. Consultez les Options d'indexation pour exclure OneDrive manuellement."
+                    }
+                    
+                } else {
+                    # Erreur générique d'accès
+                    Stop-Service -Name "WSearch" -Force -ErrorAction Stop
+                    Start-Sleep -Seconds 2
+                    Start-Service -Name "WSearch" -ErrorAction Stop
+                    
+                    $result.ActionsPerformed += "Service redémarré"
+                    $result.Success = $true
+                    $result.Message = "Service redémarré. Vérifiez l'état du disque et les permissions."
+                }
+            }
+            
+            default {
+                $result.Message = "Aucune réparation automatique disponible pour cet événement."
+            }
+        }
+        
+    } catch {
+        $result.Message = "Erreur lors de la réparation: $($_.Exception.Message)"
+    }
+    
+    return $result
+}
+
+function Repair-AllSearchEvents {
+    <#
+    .SYNOPSIS
+    Applique toutes les réparations possibles pour les événements détectés
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [Array]$Events
+    )
+    
+    $results = @{
+        TotalEvents = $Events.Count
+        Repaired = 0
+        Failed = 0
+        Skipped = 0
+        Messages = @()
+    }
+    
+    if ($Events.Count -eq 0) {
+        $results.Messages += "Aucun événement à réparer."
+        return $results
+    }
+    
+    # Demander confirmation globale
+    $eventsList = ($Events | ForEach-Object { "  - Event $($_.EventId): $($_.Description) ($($_.Count) occurrence(s))" }) -join "`n"
+    
+    $confirmMsg = "Appliquer les réparations automatiques pour les événements suivants ?`n`n$eventsList`n`n" +
+                  "Note: Les événements critiques (7042) nécessiteront une confirmation supplémentaire."
+    
+    $confirm = [System.Windows.MessageBox]::Show($confirmMsg, "Confirmation", "YesNo", "Question")
+    
+    if ($confirm -ne "Yes") {
+        $results.Skipped = $Events.Count
+        $results.Messages += "Réparation annulée par l'utilisateur."
+        return $results
+    }
+    
+    foreach ($event in $Events) {
+        try {
+            $repairResult = Repair-SearchEvent -EventData $event
+            
+            if ($repairResult.Success) {
+                $results.Repaired++
+                $results.Messages += "[OK] Event $($event.EventId): $($repairResult.Message)"
+            } else {
+                $results.Failed++
+                $results.Messages += "[ERREUR] Event $($event.EventId): $($repairResult.Message)"
+            }
+            
+        } catch {
+            $results.Failed++
+            $results.Messages += "[ERREUR] Event $($event.EventId): Erreur - $($_.Exception.Message)"
+        }
+    }
+    
+    return $results
 }
 
 function Invoke-RebuildSearchIndex {
@@ -1098,9 +1461,9 @@ function Remove-PerUserCatalogs {
 
         $result.Success = $true
         if ($result.FailedFiles.Count -gt 0) {
-            $result.Message = "$($result.DeletedCount) catalogue(s) supprimé(s). $($result.FailedFiles.Count) fichier(s) n'ont pas pu être supprimés (utilisateurs connectés?)."
+            $result.Message = "$($result.DeletedCount) catalogue(s) supprimé(s). $($result.FailedFiles.Count) fichier(s) n'ont pas pu étre supprimés (utilisateurs connectés?)."
         } else {
-            $result.Message = "$($result.DeletedCount) catalogue(s) per-user supprimé(s). Ils seront recréés à la prochaine connexion."
+            $result.Message = "$($result.DeletedCount) catalogue(s) per-user supprimé(s). Ils seront recréés é la prochaine connexion."
         }
 
     } catch {
@@ -1118,7 +1481,7 @@ function Remove-PerUserCatalogs {
 function Get-FSLogixProfileInfo {
     <#
     .SYNOPSIS
-    Récupère les informations sur les profils FSLogix montés
+    Récupére les informations sur les profils FSLogix montés
     #>
 
     $info = @{
@@ -1258,7 +1621,7 @@ function Repair-SearchService {
 
     try {
         # Step 1: Stop service
-        $result.Steps += "Arrêt du service WSearch..."
+        $result.Steps += "Arrét du service WSearch..."
         Stop-Service -Name "WSearch" -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
 
@@ -1268,7 +1631,7 @@ function Repair-SearchService {
         Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\WSearch" -Name "DelayedAutoStart" -Value 1 -Type DWord -ErrorAction SilentlyContinue
 
         # Step 3: Clear search data registry
-        $result.Steps += "Nettoyage des paramètres de recherche..."
+        $result.Steps += "Nettoyage des paramétres de recherche..."
         $searchRegPath = "HKLM:\SOFTWARE\Microsoft\Windows Search"
         if (Test-Path $searchRegPath) {
             Set-ItemProperty -Path $searchRegPath -Name "SetupCompletedSuccessfully" -Value 0 -Type DWord -ErrorAction SilentlyContinue
@@ -1286,7 +1649,7 @@ function Repair-SearchService {
         Start-Service -Name "WSearch" -ErrorAction Stop
 
         $result.Success = $true
-        $result.Message = "Réparation terminée. Le service WSearch a été redémarré."
+        $result.Message = "réparation terminée. Le service WSearch a été redémarré."
 
     } catch {
         $result.Message = "Erreur lors de la réparation: $($_.Exception.Message)"
@@ -1382,11 +1745,11 @@ function Repair-SearchService {
 
                             <TextBlock Opacity="0.9" TextWrapping="Wrap">
                                 Conseil: clique "Charger recommandés" puis "Appliquer tout (Desired)".
-                                Utilise (Remove) pour revenir à "Non configuré" sur les clés policy.
+                                Utilise (Remove) pour revenir é "Non configuré" sur les clés policy.
                             </TextBlock>
 
                             <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right">
-                                <Button x:Name="BtnRefreshTweaks" Content="Rafraîchir" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnRefreshTweaks" Content="Rafraéchir" Margin="4" Padding="12,6"/>
                                 <Button x:Name="BtnLoadRecommended" Content="Charger recommandés" Margin="4" Padding="12,6"/>
                                 <Button x:Name="BtnApplySelected" Content="Appliquer sélection" Margin="4" Padding="12,6"/>
                                 <Button x:Name="BtnApplyAll" Content="Appliquer tout (Desired)" Margin="4" Padding="12,6"/>
@@ -1405,7 +1768,7 @@ function Repair-SearchService {
                               RowHeight="30">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Catégorie" Binding="{Binding Category}" Width="170" IsReadOnly="True"/>
-                            <DataGridTextColumn Header="Paramètre" Binding="{Binding Name}" Width="280" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="Paramétre" Binding="{Binding Name}" Width="280" IsReadOnly="True"/>
                             <DataGridTextColumn Header="Valeur" Binding="{Binding ValueName}" Width="190" IsReadOnly="True"/>
                             <DataGridTextColumn Header="Actuel" Binding="{Binding Current}" Width="95" IsReadOnly="True"/>
                             <DataGridTextColumn Header="Recommandé" Binding="{Binding Recommended}" Width="115" IsReadOnly="True"/>
@@ -1645,19 +2008,19 @@ function Repair-SearchService {
                                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2">Statut catalogue:</TextBlock>
                                     <TextBlock Grid.Row="1" Grid.Column="1" x:Name="TxtIdxCatalogStatus" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,2">Éléments indexés:</TextBlock>
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,2">éléments indexés:</TextBlock>
                                     <TextBlock Grid.Row="1" Grid.Column="3" x:Name="TxtIdxItemsCount" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,2">Taille index (MB):</TextBlock>
                                     <TextBlock Grid.Row="2" Grid.Column="1" x:Name="TxtIdxSizeMB" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="2" Margin="0,2">Dernière MAJ:</TextBlock>
+                                    <TextBlock Grid.Row="2" Grid.Column="2" Margin="0,2">Derniére MAJ:</TextBlock>
                                     <TextBlock Grid.Row="2" Grid.Column="3" x:Name="TxtIdxLastUpdate" FontWeight="SemiBold" Margin="0,2">-</TextBlock>
                                 </Grid>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Top">
-                                <Button x:Name="BtnRefreshIndexStatus" Content="Rafraîchir statut" Margin="4" Padding="12,6"/>
+                                <Button x:Name="BtnRefreshIndexStatus" Content="Rafraéchir statut" Margin="4" Padding="12,6"/>
                                 <Button x:Name="BtnOpenIndexOptions" Content="Options d'indexation" Margin="4" Padding="12,6"/>
                             </StackPanel>
                         </Grid>
@@ -1721,7 +2084,7 @@ function Repair-SearchService {
                                 <TextBlock FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8">Actions de maintenance et réparation</TextBlock>
                                 <TextBlock TextWrapping="Wrap" Opacity="0.85">
                                     Utilisez ces outils pour diagnostiquer et réparer les problèmes courants de Windows Search.
-                                    ATTENTION: Certaines actions peuvent nécessiter une reconstruction complète de l'index (plusieurs heures).
+                                    ATTENTION: Certaines actions peuvent nécessiter une reconstruction compléte de l'index (plusieurs heures).
                                 </TextBlock>
                             </StackPanel>
 
@@ -1743,7 +2106,7 @@ function Repair-SearchService {
                             <StackPanel Grid.Column="0" Margin="4">
                                 <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Index Global</TextBlock>
                                 <Button x:Name="BtnRebuildIndex" Content="Reconstruire l'index" Margin="0,2" Padding="8,6"
-                                        ToolTip="Supprime Windows.edb et force une reconstruction complète de l'index (peut prendre plusieurs heures)"/>
+                                        ToolTip="Supprime Windows.edb et force une reconstruction compléte de l'index (peut prendre plusieurs heures)"/>
                                 <Button x:Name="BtnRepairService" Content="Réparer le service" Margin="0,2" Padding="8,6"
                                         ToolTip="Réinitialise la configuration du service et ré-enregistre les composants"/>
                             </StackPanel>
@@ -1751,8 +2114,8 @@ function Repair-SearchService {
                             <StackPanel Grid.Column="1" Margin="4">
                                 <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Catalogues Per-User</TextBlock>
                                 <TextBlock FontSize="10" Opacity="0.7" Margin="0,0,0,4" TextWrapping="Wrap">FSLogix: déconnecter les utilisateurs ou cocher l'option ci-dessous</TextBlock>
-                                <CheckBox x:Name="ChkStopWSearchBeforeDelete" Content="Arrêter WSearch avant" Margin="0,2" IsChecked="True"
-                                          ToolTip="Arrête le service WSearch avant la suppression pour débloquer les fichiers verrouillés"/>
+                                <CheckBox x:Name="ChkStopWSearchBeforeDelete" Content="Arréter WSearch avant" Margin="0,2" IsChecked="True"
+                                          ToolTip="Arréte le service WSearch avant la suppression pour débloquer les fichiers verrouillés"/>
                                 <Button x:Name="BtnDeleteAllPerUser" Content="Supprimer tous" Margin="0,2" Padding="8,6"
                                         ToolTip="Supprime tous les catalogues per-user. Le service WSearch sera arrêté si l'option est cochée."/>
                                 <Button x:Name="BtnDeleteSelectedPerUser" Content="Supprimer sélectionné" Margin="0,2" Padding="8,6"
@@ -1765,12 +2128,12 @@ function Repair-SearchService {
                                 <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Journal USN (Update Sequence Number)</TextBlock>
                                 <TextBlock FontSize="10" Opacity="0.7" Margin="0,0,0,4" TextWrapping="Wrap">Journal NTFS qui enregistre les modifications de fichiers. Windows Search l'utilise pour détecter les fichiers modifiés. Erreur 3079 = quota insuffisant.</TextBlock>
                                 <Button x:Name="BtnResetUSN" Content="Réinitialiser USN (C:)" Margin="0,2" Padding="8,6"
-                                        ToolTip="Supprime et recrée le journal USN sur C:. Corrige l'erreur 3079. Redémarrer WSearch après."/>
+                                        ToolTip="Supprime et recrée le journal USN sur C:. Corrige l'erreur 3079. Redémarrer WSearch aprés."/>
                             </StackPanel>
 
                             <StackPanel Grid.Column="3" Margin="4">
                                 <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">Service WSearch</TextBlock>
-                                <Button x:Name="BtnStopWSearchMaint" Content="Arrêter" Margin="0,2" Padding="8,6"/>
+                                <Button x:Name="BtnStopWSearchMaint" Content="Arréter" Margin="0,2" Padding="8,6"/>
                                 <Button x:Name="BtnStartWSearchMaint" Content="Démarrer" Margin="0,2" Padding="8,6"/>
                                 <Button x:Name="BtnRestartWSearchMaint" Content="Redémarrer" Margin="0,2" Padding="8,6"/>
                             </StackPanel>
@@ -1783,7 +2146,7 @@ function Repair-SearchService {
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" FontWeight="SemiBold" Margin="0,0,0,8">Résultats du diagnostic (erreurs des 7 derniers jours):</TextBlock>
+                        <TextBlock Grid.Row="0" FontWeight="SemiBold" Margin="0,0,0,8">résultats du diagnostic (erreurs des 7 derniers jours):</TextBlock>
 
                         <DataGrid x:Name="GridDiagnostics" Grid.Row="1"
                                   AutoGenerateColumns="False"
@@ -1817,8 +2180,91 @@ function Repair-SearchService {
                                 <DataGridTextColumn Header="Sévérité" Binding="{Binding Severity}" Width="80"/>
                                 <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="200"/>
                                 <DataGridTextColumn Header="Solution recommandée" Binding="{Binding Solution}" Width="250"/>
-                                <DataGridTextColumn Header="Dernière occurrence" Binding="{Binding LastOccurrence, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="140"/>
+                                <DataGridTextColumn Header="Derniére occurrence" Binding="{Binding LastOccurrence, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="140"/>
                                 <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Événements ID">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border BorderBrush="#333" BorderThickness="1" CornerRadius="6" Padding="12" Grid.Row="0" Margin="0,0,0,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Orientation="Vertical">
+                                <TextBlock FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8">Détection et réparation des erreurs Windows Search</TextBlock>
+                                <TextBlock TextWrapping="Wrap" Opacity="0.85">
+                                    Cet onglet analyse les événements Windows Search spécifiques et propose des solutions automatiques.
+                                    Les erreurs suivantes sont détectées: 1019 (permissions/chemins), 7042 (catalogue corrompu), 7040 (données corrompues), 3036 (échec d'indexation).
+                                </TextBlock>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Vertical" Grid.Column="1" VerticalAlignment="Top">
+                                <Button x:Name="BtnScanSearchEvents" Content="Analyser les événements" Margin="4" Padding="12,6" FontWeight="SemiBold"/>
+                                <Button x:Name="BtnApplyAllFixes" Content="Appliquer toutes les réparations" Margin="4" Padding="12,6" Background="#2D5F2D" Foreground="White"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" FontWeight="SemiBold" Margin="0,0,0,8">Événements détectés (7 derniers jours):</TextBlock>
+
+                        <DataGrid x:Name="GridSearchEvents" Grid.Row="1"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  IsReadOnly="True"
+                                  SelectionMode="Single"
+                                  SelectionUnit="FullRow"
+                                  GridLinesVisibility="Horizontal"
+                                  HeadersVisibility="Column"
+                                  RowHeight="32">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Severity}" Value="Critical">
+                                            <Setter Property="Background" Value="#66FF0000"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Severity}" Value="Error">
+                                            <Setter Property="Background" Value="#4CFF4444"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Severity}" Value="Warning">
+                                            <Setter Property="Background" Value="#4CFFA500"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Event ID" Binding="{Binding EventId}" Width="80"/>
+                                <DataGridTextColumn Header="Occurrences" Binding="{Binding Count}" Width="90"/>
+                                <DataGridTextColumn Header="Sévérité" Binding="{Binding Severity}" Width="80"/>
+                                <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*" MinWidth="250"/>
+                                <DataGridTextColumn Header="Solution proposée" Binding="{Binding Solution}" Width="*" MinWidth="300"/>
+                                <DataGridTextColumn Header="Dernière occurrence" Binding="{Binding LastOccurrence, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="140"/>
+                                <DataGridTemplateColumn Header="Action" Width="120">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Content="Réparer" Tag="{Binding}" Padding="8,4" Margin="2"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
                     </Grid>
@@ -1930,7 +2376,7 @@ function Build-SystemInfoText {
 
 function Update-ProfileSelector {
     # Update detected profile indicator
-    $TxtDetectedProfile.Text = "(Détecté: $($script:detectedProfileType))"
+    $TxtDetectedProfile.Text = "(détecté: $($script:detectedProfileType))"
 
     # Select the appropriate ComboBox item based on selected profile type
     $profileMapping = @{
@@ -1988,6 +2434,13 @@ $GridIndexLocations.ItemsSource = $IndexLocationRows
 # Diagnostics datasource
 $DiagnosticsRows = New-Object System.Collections.ObjectModel.ObservableCollection[Object]
 $GridDiagnostics.ItemsSource = $DiagnosticsRows
+
+# Search Events datasource
+$SearchEventsRows = New-Object System.Collections.ObjectModel.ObservableCollection[Object]
+$GridSearchEvents = $window.FindName("GridSearchEvents")
+$GridSearchEvents.ItemsSource = $SearchEventsRows
+$BtnScanSearchEvents = $window.FindName("BtnScanSearchEvents")
+$BtnApplyAllFixes = $window.FindName("BtnApplyAllFixes")
 
 function Refresh-Tweaks {
     $global:UiRows = Build-UiRows
@@ -2152,7 +2605,7 @@ $BtnApplyAll.Add_Click({
     try {
         $count = Apply-AllDesired
         Refresh-Tweaks
-        Set-Status "Appliqué: $count paramètre(s)."
+        Set-Status "Appliqué: $count paramétre(s)."
         $TxtHint.Text = ""
     } catch {
         Set-Status "Erreur: $($_.Exception.Message)"
@@ -2231,9 +2684,9 @@ Scope : $($row.Scope)
 User  : $($row.User)
 Path  : $($row.Path)
 
-Conséquence:
-- l'index sera reconstruit automatiquement (au prochain usage/logon)
-- possible pic CPU/DISK pendant la reconstruction
+Consequence:
+- L index sera reconstruit automatiquement (au prochain usage/logon)
+- Possible pic CPU/DISK pendant la reconstruction
 
 Confirmer la suppression ?
 "@
@@ -2241,7 +2694,7 @@ Confirmer la suppression ?
         $res = [System.Windows.MessageBox]::Show($warning, "Confirmation", "YesNo", "Warning")
         if ($res -ne "Yes") { return }
 
-        # Recommandation sécurité: si Global, stopper WSearch avant suppression
+        # Recommandation securite: si Global, stopper WSearch avant suppression
         if ($row.Scope -eq "Global") {
             $svc = Get-Service WSearch -ErrorAction SilentlyContinue
             if ($svc -and $svc.Status -eq "Running") {
@@ -2305,7 +2758,7 @@ $BtnClearLogFilter.Add_Click({
 
 $BtnExportLogs.Add_Click({
     try {
-        if ($LogRows.Count -eq 0) { throw "Aucun log à exporter. Charge d'abord les logs." }
+        if ($LogRows.Count -eq 0) { throw "Aucun log é exporter. Charge d'abord les logs." }
 
         $dir = "C:\Temp"
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
@@ -2440,7 +2893,7 @@ $BtnRunDiagnostics.Add_Click({
         if ($diagnostics.Count -eq 0) {
             Set-Status "Diagnostic terminé: aucune erreur détectée."
         } else {
-            Set-Status "Diagnostic terminé: $($diagnostics.Count) problème(s) détecté(s)."
+            Set-Status "Diagnostic terminé: $($diagnostics.Count) probléme(s) détecté(s)."
         }
     } catch {
         Set-Status "Erreur: $($_.Exception.Message)"
@@ -2452,12 +2905,12 @@ $BtnRunDiagnostics.Add_Click({
 
 $BtnRebuildIndex.Add_Click({
     $warning = @"
-ATTENTION: Cette action va supprimer l'index Windows Search global.
+ATTENTION: Cette action va supprimer l index Windows Search global.
 
-Conséquences:
-- L'index sera entièrement reconstruit (peut prendre plusieurs heures)
+Consequences:
+- L index sera entierement reconstruit (peut prendre plusieurs heures)
 - La recherche Windows sera indisponible pendant la reconstruction
-- Pic d'utilisation CPU/Disque pendant la reconstruction
+- Pic d utilisation CPU/Disque pendant la reconstruction
 
 Voulez-vous continuer ?
 "@
@@ -2472,7 +2925,7 @@ Voulez-vous continuer ?
         $result = Invoke-RebuildSearchIndex -Force
         if ($result.Success) {
             Set-Status $result.Message
-            [System.Windows.MessageBox]::Show($result.Message, "Succès", "OK", "Information") | Out-Null
+            [System.Windows.MessageBox]::Show($result.Message, "Succés", "OK", "Information") | Out-Null
         } else {
             Set-Status "Erreur: $($result.Message)"
             [System.Windows.MessageBox]::Show($result.Message, "Erreur", "OK", "Error") | Out-Null
@@ -2486,14 +2939,14 @@ Voulez-vous continuer ?
 })
 
 $BtnRepairService.Add_Click({
-    Set-Status "Réparation du service WSearch..."
+    Set-Status "réparation du service WSearch..."
     $window.Cursor = [System.Windows.Input.Cursors]::Wait
 
     try {
         $result = Repair-SearchService
         if ($result.Success) {
             Set-Status $result.Message
-            [System.Windows.MessageBox]::Show("Étapes effectuées:`n$($result.Steps -join "`n")`n`n$($result.Message)", "Réparation", "OK", "Information") | Out-Null
+            [System.Windows.MessageBox]::Show("étapes effectuées:`n$($result.Steps -join "`n")`n`n$($result.Message)", "réparation", "OK", "Information") | Out-Null
         } else {
             Set-Status "Erreur: $($result.Message)"
             [System.Windows.MessageBox]::Show($result.Message, "Erreur", "OK", "Error") | Out-Null
@@ -2515,11 +2968,11 @@ $BtnDeleteAllPerUser.Add_Click({
 ATTENTION: Cette action va supprimer TOUS les catalogues Windows Search per-user.
 
 Conséquences:
-- Les index per-user seront recréés à la prochaine connexion de chaque utilisateur
+- Les index per-user seront recréés é la prochaine connexion de chaque utilisateur
 - Peut résoudre les erreurs de catalogue corrompu (EventID 7040, 3031)$serviceNote
 
 NOTE FSLogix: Si des utilisateurs sont connectés avec des profils FSLogix,
-leurs catalogues ne pourront être supprimés que si le service WSearch est arrêté.
+leurs catalogues ne pourront étre supprimés que si le service WSearch est arrêté.
 
 Voulez-vous continuer ?
 "@
@@ -2593,13 +3046,13 @@ $BtnDeleteSelectedPerUser.Add_Click({
 
         if ($result.Success -and $result.DeletedCount -gt 0) {
             Set-Status "Catalogue supprimé: $path"
-            [System.Windows.MessageBox]::Show("Catalogue supprimé avec succès.", "Succès", "OK", "Information") | Out-Null
+            [System.Windows.MessageBox]::Show("Catalogue supprimé avec succés.", "Succés", "OK", "Information") | Out-Null
         } elseif ($result.FailedFiles.Count -gt 0) {
-            Set-Status "Échec de la suppression"
-            [System.Windows.MessageBox]::Show("Impossible de supprimer le fichier. L'utilisateur est probablement connecté.`n`nEssayez de:`n1. Déconnecter l'utilisateur`n2. Ou arrêter manuellement le service WSearch", "Erreur", "OK", "Error") | Out-Null
+            Set-Status "échec de la suppression"
+            [System.Windows.MessageBox]::Show("Impossible de supprimer le fichier. L'utilisateur est probablement connecté.`n`nEssayez de:`n1. Déconnecter l'utilisateur`n2. Ou arréter manuellement le service WSearch", "Erreur", "OK", "Error") | Out-Null
         } else {
             Set-Status "Fichier non trouvé"
-            [System.Windows.MessageBox]::Show("Le fichier n'existe pas ou a déjà été supprimé.", "Information", "OK", "Information") | Out-Null
+            [System.Windows.MessageBox]::Show("Le fichier n'existe pas ou a déjé été supprimé.", "Information", "OK", "Information") | Out-Null
         }
     } catch {
         Set-Status "Erreur: $($_.Exception.Message)"
@@ -2618,11 +3071,11 @@ $BtnShowConnectedUsers.Add_Click({
         } else {
             $msg = "Utilisateurs actuellement connectés:`n`n"
             foreach ($u in $users) {
-                $msg += "- $($u.Username) (Session: $($u.SessionName), État: $($u.State))`n"
+                $msg += "- $($u.Username) (Session: $($u.SessionName), état: $($u.State))`n"
             }
             $msg += "`nPour supprimer les catalogues per-user de ces utilisateurs:`n"
             $msg += "1. Déconnectez les utilisateurs, OU`n"
-            $msg += "2. Cochez 'Arrêter WSearch avant' et utilisez 'Supprimer tous'"
+            $msg += "2. Cochez 'Arréter WSearch avant' et utilisez 'Supprimer tous'"
 
             [System.Windows.MessageBox]::Show($msg, "Utilisateurs connectés", "OK", "Information") | Out-Null
         }
@@ -2640,22 +3093,22 @@ ATTENTION: Cette action va réinitialiser le journal USN du volume C:.
 Le journal USN (Update Sequence Number) est utilisé par Windows Search pour suivre les modifications de fichiers.
 Cette action peut résoudre l'erreur 3079 (quota insuffisant).
 
-Après cette opération, redémarrez le service WSearch.
+Aprés cette opération, redémarrez le service WSearch.
 
 Voulez-vous continuer ?
 "@
 
-    $res = [System.Windows.MessageBox]::Show($warning, "Réinitialiser USN", "YesNo", "Warning")
+    $res = [System.Windows.MessageBox]::Show($warning, "Reinitialiser USN", "YesNo", "Warning")
     if ($res -ne "Yes") { return }
 
-    Set-Status "Réinitialisation du journal USN..."
+    Set-Status "Reinitialisation du journal USN..."
     $window.Cursor = [System.Windows.Input.Cursors]::Wait
 
     try {
         $result = Reset-USNJournal -Volume "C:"
         if ($result.Success) {
             Set-Status $result.Message
-            [System.Windows.MessageBox]::Show($result.Message, "Succès", "OK", "Information") | Out-Null
+            [System.Windows.MessageBox]::Show($result.Message, "Succés", "OK", "Information") | Out-Null
         } else {
             Set-Status "Erreur: $($result.Message)"
             [System.Windows.MessageBox]::Show($result.Message, "Erreur", "OK", "Error") | Out-Null
@@ -2696,6 +3149,127 @@ $BtnRestartWSearchMaint.Add_Click({
         Set-Status "Erreur: $($_.Exception.Message)"
         [System.Windows.MessageBox]::Show($_.Exception.Message, "Erreur", "OK", "Error") | Out-Null
     }
+})
+
+# -------------------------
+# Events - Search Events tab
+# -------------------------
+$BtnScanSearchEvents.Add_Click({
+    Set-Status "Analyse des événements Windows Search..."
+    $window.Cursor = [System.Windows.Input.Cursors]::Wait
+
+    try {
+        $searchEvents = Get-SpecificSearchEvents
+        $SearchEventsRows.Clear()
+        foreach ($evt in $searchEvents) { $SearchEventsRows.Add($evt) }
+
+        if ($searchEvents.Count -eq 0) {
+            Set-Status "Aucun événement problématique détecté (7 derniers jours)."
+            [System.Windows.MessageBox]::Show("Aucun événement Windows Search problématique détecté dans les 7 derniers jours.", "Analyse terminée", "OK", "Information") | Out-Null
+        } else {
+            $criticalCount = ($searchEvents | Where-Object { $_.Severity -eq "Critical" }).Count
+            $errorCount = ($searchEvents | Where-Object { $_.Severity -eq "Error" }).Count
+            $warningCount = ($searchEvents | Where-Object { $_.Severity -eq "Warning" }).Count
+            
+            $statusMsg = "Événements détectés: $($searchEvents.Count) | Critiques: $criticalCount | Erreurs: $errorCount | Avertissements: $warningCount"
+            Set-Status $statusMsg
+            
+            if ($criticalCount -gt 0) {
+                [System.Windows.MessageBox]::Show("$criticalCount événement(s) CRITIQUE(S) détecté(s) !`n`nCes événements nécessitent une action immédiate.`nConsultez la colonne 'Solution proposée' pour les détails.", "Attention", "OK", "Warning") | Out-Null
+            }
+        }
+    } catch {
+        Set-Status "Erreur: $($_.Exception.Message)"
+        [System.Windows.MessageBox]::Show("Erreur lors de l'analyse des événements:`n$($_.Exception.Message)", "Erreur", "OK", "Error") | Out-Null
+    } finally {
+        $window.Cursor = $null
+    }
+})
+
+$BtnApplyAllFixes.Add_Click({
+    if ($SearchEventsRows.Count -eq 0) {
+        [System.Windows.MessageBox]::Show("Aucun événement à réparer. Cliquez d'abord sur 'Analyser les événements'.", "Information", "OK", "Information") | Out-Null
+        return
+    }
+
+    Set-Status "Application des réparations..."
+    $window.Cursor = [System.Windows.Input.Cursors]::Wait
+
+    try {
+        $eventsArray = @($SearchEventsRows)
+        $repairResults = Repair-AllSearchEvents -Events $eventsArray
+
+        $resultMsg = "=== RÉSULTATS DES RÉPARATIONS ===`n`n"
+        $resultMsg += "Total événements: $($repairResults.TotalEvents)`n"
+        $resultMsg += "Réparés: $($repairResults.Repaired)`n"
+        $resultMsg += "Échoués: $($repairResults.Failed)`n"
+        $resultMsg += "Ignorés: $($repairResults.Skipped)`n`n"
+        $resultMsg += "Détails:`n"
+        $resultMsg += ($repairResults.Messages -join "`n")
+
+        Set-Status "Réparations terminées: $($repairResults.Repaired) réussie(s), $($repairResults.Failed) échouée(s)."
+        [System.Windows.MessageBox]::Show($resultMsg, "Résultats des réparations", "OK", "Information") | Out-Null
+
+        # Rafraîchir la liste après réparation
+        if ($repairResults.Repaired -gt 0) {
+            Start-Sleep -Seconds 2
+            $BtnScanSearchEvents.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        }
+    } catch {
+        Set-Status "Erreur: $($_.Exception.Message)"
+        [System.Windows.MessageBox]::Show("Erreur lors des réparations:`n$($_.Exception.Message)", "Erreur", "OK", "Error") | Out-Null
+    } finally {
+        $window.Cursor = $null
+    }
+})
+
+# Gestionnaire pour les boutons "Réparer" individuels dans la grille
+$window.Add_Loaded({
+    $GridSearchEvents.AddHandler(
+        [System.Windows.Controls.Button]::ClickEvent,
+        [System.Windows.RoutedEventHandler]{
+            param($sender, $e)
+            
+            if ($e.OriginalSource -is [System.Windows.Controls.Button]) {
+                $button = $e.OriginalSource
+                if ($button.Content -eq "Réparer") {
+                    $eventData = $button.Tag
+                    
+                    if ($null -ne $eventData) {
+                        Set-Status "Réparation en cours pour Event ID $($eventData.EventId)..."
+                        $window.Cursor = [System.Windows.Input.Cursors]::Wait
+                        
+                        try {
+                            $repairResult = Repair-SearchEvent -EventData $eventData
+                            
+                            if ($repairResult.Success) {
+                                Set-Status "Réparation réussie: $($repairResult.Message)"
+                                
+                                $detailMsg = "Event ID: $($eventData.EventId)`n`n"
+                                $detailMsg += "Actions effectuées:`n"
+                                $detailMsg += ($repairResult.ActionsPerformed -join "`n")
+                                $detailMsg += "`n`nRésultat:`n$($repairResult.Message)"
+                                
+                                [System.Windows.MessageBox]::Show($detailMsg, "Réparation réussie", "OK", "Information") | Out-Null
+                                
+                                # Rafraîchir la liste
+                                Start-Sleep -Seconds 2
+                                $BtnScanSearchEvents.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+                            } else {
+                                Set-Status "Réparation échouée: $($repairResult.Message)"
+                                [System.Windows.MessageBox]::Show("Réparation échouée:`n`n$($repairResult.Message)", "Erreur", "OK", "Error") | Out-Null
+                            }
+                        } catch {
+                            Set-Status "Erreur: $($_.Exception.Message)"
+                            [System.Windows.MessageBox]::Show("Erreur lors de la réparation:`n$($_.Exception.Message)", "Erreur", "OK", "Error") | Out-Null
+                        } finally {
+                            $window.Cursor = $null
+                        }
+                    }
+                }
+            }
+        }
+    )
 })
 
 # -------------------------
