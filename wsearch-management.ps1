@@ -163,12 +163,19 @@ $ProfileRecommendations = @{
         DisableRemovableDriveIndexing = "1"
         AllowCloudSearch = "0"
         AllowSearchToUseLocation = "0"
+        AllowCortana = "0"
+        AllowCortanaAboveLock = "0"
+        AllowIndexingEncryptedStoresOrItems = "0"
+        PreventIndexingOutlook = "0"
+        PreventIndexingEmailAttachments = "1"
+        AutoAddShares = "0"
+        ConnectedSearchUseWebOverMeteredConnections = "0"
         RoamSearch = ""  # N/A
         Notes = "Configuration standard pour postes fixes. L'indexation per-user n'est généralement pas nécessaire."
     }
     "FSLogix" = @{
         Description = "FSLogix - Optimisé pour conteneurs VHD/VHDX"
-        EnablePerUserCatalog = "1"  # Recommandé pour isoler les index dans le conteneur
+        EnablePerUserCatalog = "0"  # Désactivé car fonctionne mal avec FSLogix
         DisableBackoff = "0"  # Garder le backoff pour réduire la charge
         ConnectedSearchUseWeb = "0"
         EnableDynamicContentInWSB = "0"
@@ -176,8 +183,15 @@ $ProfileRecommendations = @{
         DisableRemovableDriveIndexing = "1"
         AllowCloudSearch = "0"
         AllowSearchToUseLocation = "0"
+        AllowCortana = "0"
+        AllowCortanaAboveLock = "0"
+        AllowIndexingEncryptedStoresOrItems = "0"
+        PreventIndexingOutlook = "0"
+        PreventIndexingEmailAttachments = "1"
+        AutoAddShares = "0"
+        ConnectedSearchUseWebOverMeteredConnections = "0"
         RoamSearch = "0"  # désactivé sur OS modernes (>= 1809)
-        Notes = "Per-user catalog isolé dans le VHD. RoamSearch désactivé car géré nativement. Backoff actif pour réduire I/O."
+        Notes = "Per-user catalog désactivé car fonctionne mal avec FSLogix. RoamSearch désactivé car géré nativement. Backoff actif pour réduire I/O."
     }
     "UPD" = @{
         Description = "User Profile Disks (RDS) - Optimisé pour VHD RDS"
@@ -189,6 +203,13 @@ $ProfileRecommendations = @{
         DisableRemovableDriveIndexing = "1"
         AllowCloudSearch = "0"
         AllowSearchToUseLocation = "0"
+        AllowCortana = "0"
+        AllowCortanaAboveLock = "0"
+        AllowIndexingEncryptedStoresOrItems = "0"
+        PreventIndexingOutlook = "0"
+        PreventIndexingEmailAttachments = "1"
+        AutoAddShares = "0"
+        ConnectedSearchUseWebOverMeteredConnections = "0"
         RoamSearch = ""  # N/A pour UPD
         Notes = "Index per-user stocké dans le UPD. Minimise l'impact sur le serveur RDS."
     }
@@ -202,6 +223,13 @@ $ProfileRecommendations = @{
         DisableRemovableDriveIndexing = "1"
         AllowCloudSearch = "0"
         AllowSearchToUseLocation = "0"
+        AllowCortana = "0"
+        AllowCortanaAboveLock = "0"
+        AllowIndexingEncryptedStoresOrItems = "0"
+        PreventIndexingOutlook = "0"
+        PreventIndexingEmailAttachments = "1"
+        AutoAddShares = "0"
+        ConnectedSearchUseWebOverMeteredConnections = "0"
         RoamSearch = ""  # N/A
         Notes = "ATTENTION: Les catalogues per-user dans les profils roaming causent des problèmes de synchronisation et de corruption. Utiliser l'index global uniquement."
     }
@@ -303,6 +331,90 @@ $RawSettings = @(
         RequiresUPD=$false
         RecommendedDynamic={ Get-ProfileRecommendation "AllowSearchToUseLocation" }
         Description="0 = désactive usage localisation (confidentialité)."
+    },
+    [pscustomobject]@{
+        Category="Windows Search (Policies)"
+        DisplayName="AllowCortana"
+        KeyPath="HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search"
+        ValueName="AllowCortana"
+        Type="DWORD"
+        Policy=$true
+        RequiresFSLogix=$false
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "AllowCortana" }
+        Description="0 = désactive Cortana (économise ressources et confidentialité)."
+    },
+    [pscustomobject]@{
+        Category="Windows Search (Policies)"
+        DisplayName="AllowCortanaAboveLock"
+        KeyPath="HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search"
+        ValueName="AllowCortanaAboveLock"
+        Type="DWORD"
+        Policy=$true
+        RequiresFSLogix=$false
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "AllowCortanaAboveLock" }
+        Description="0 = empêche Cortana sur écran verrouillé (sécurité)."
+    },
+    [pscustomobject]@{
+        Category="Windows Search (Policies)"
+        DisplayName="AllowIndexingEncryptedStoresOrItems"
+        KeyPath="HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search"
+        ValueName="AllowIndexingEncryptedStoresOrItems"
+        Type="DWORD"
+        Policy=$true
+        RequiresFSLogix=$false
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "AllowIndexingEncryptedStoresOrItems" }
+        Description="0 = pas d'indexation des fichiers chiffrés (économise ressources)."
+    },
+    [pscustomobject]@{
+        Category="Windows Search (Policies)"
+        DisplayName="PreventIndexingOutlook"
+        KeyPath="HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search"
+        ValueName="PreventIndexingOutlook"
+        Type="DWORD"
+        Policy=$true
+        RequiresFSLogix=$false
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "PreventIndexingOutlook" }
+        Description="1 = empêche l'indexation de Microsoft Office Outlook (économise ressources)."
+    },
+    [pscustomobject]@{
+        Category="Windows Search (Policies)"
+        DisplayName="PreventIndexingEmailAttachments"
+        KeyPath="HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search"
+        ValueName="PreventIndexingEmailAttachments"
+        Type="DWORD"
+        Policy=$true
+        RequiresFSLogix=$false
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "PreventIndexingEmailAttachments" }
+        Description="1 = empêche l'indexation des pièces jointes de courrier électronique (économise ressources)."
+    },
+    [pscustomobject]@{
+        Category="Windows Search (Policies)"
+        DisplayName="AutoAddShares"
+        KeyPath="HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search"
+        ValueName="AutoAddShares"
+        Type="DWORD"
+        Policy=$true
+        RequiresFSLogix=$false
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "AutoAddShares" }
+        Description="0 = empêche l'ajout automatique de dossiers partagés à l'index (économise ressources)."
+    },
+    [pscustomobject]@{
+        Category="Windows Search (Policies)"
+        DisplayName="ConnectedSearchUseWebOverMeteredConnections"
+        KeyPath="HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search"
+        ValueName="ConnectedSearchUseWebOverMeteredConnections"
+        Type="DWORD"
+        Policy=$true
+        RequiresFSLogix=$false
+        RequiresUPD=$false
+        RecommendedDynamic={ Get-ProfileRecommendation "ConnectedSearchUseWebOverMeteredConnections" }
+        Description="0 = pas de recherche Web sur connexions limitées (économise bande passante)."
     },
 
     [pscustomobject]@{
